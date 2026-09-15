@@ -95,6 +95,18 @@ export interface ResultsInfo {
   hasNext: boolean;
   attempts: number;
   assist: boolean;
+  fuel: number;
+  oxygen: number;
+  topSpeed: number;
+  jumps: number;
+  ghostOn: boolean;
+}
+
+const SHARE_BUTTON = '<button class="nav btn share-x" data-action="share" title="Copy an ASCII scorecard and post on X"><span class="x-mark" aria-hidden="true">𝕏</span>Share on X</button>';
+
+function meter(label: string, v: number, cls: string): string {
+  const p = Math.round(Math.max(0, Math.min(1, v)) * 100);
+  return `<div class="stat-meter ${cls}"><span>${label}</span><i><b style="width:${p}%"></b></i><em>${p}%</em></div>`;
 }
 
 export function resultsScreen(r: ResultsInfo): string {
@@ -110,10 +122,22 @@ export function resultsScreen(r: ResultsInfo): string {
       <div class="result-medal">${medalIcon(r.medal, 'xl')}<div class="result-medal-name">${MEDAL_NAMES[r.medal]}</div></div>
       <div class="result-time">${formatTime(r.time)}${r.newRecord ? '<span class="badge">NEW RECORD</span>' : ''}</div>
       <div class="result-meta">${r.prevBest ? `Previous best ${formatTime(r.prevBest)} · ` : ''}${r.attempts} attempt${r.attempts === 1 ? '' : 's'}${r.assist ? ' · jump assist on' : ''}</div>
+      <div class="run-stats">
+        ${meter('Fuel', r.fuel, 'fuel')}
+        ${meter('O₂', r.oxygen, 'o2')}
+        <div class="stat-pair"><span>Top speed</span><b>${Math.round(r.topSpeed)}</b></div>
+        <div class="stat-pair"><span>Jumps</span><b>${r.jumps}</b></div>
+      </div>
       <ul class="targets">${rows}<li class="got">${medalIcon(1, 'sm')}<span>Bronze</span><b>finish</b></li></ul>
+      <div class="ghost-note">${
+        r.newRecord || !r.prevBest
+          ? `<span class="holo-dot"></span>Ghost saved: your hologram will race you on this road${r.ghostOn ? '' : ' (ghosts are currently off)'}`
+          : `<span class="holo-dot"></span>Your fastest ghost (${formatTime(r.prevBest)}) is still the one to beat`
+      } · <button class="linkish nav" data-action="toggle-ghost">${r.ghostOn ? 'Turn ghosts off' : 'Turn ghosts on'}</button></div>
       <div class="actions">
         ${r.hasNext ? '<button class="nav btn primary" data-action="next">Next Road</button>' : ''}
         <button class="nav btn ${r.hasNext ? '' : 'primary'}" data-action="retry">Retry <kbd>R</kbd></button>
+        ${SHARE_BUTTON}
         <button class="nav btn ghost" data-action="worlds">Worlds</button>
       </div>
     </div>
@@ -131,13 +155,14 @@ export function endlessResults(opts: { daily: boolean; label: string; distance: 
       <div class="result-meta">Best ${opts.best} m · survived ${formatTime(opts.time)}</div>
       <div class="actions">
         <button class="nav btn primary" data-action="retry">Retry <kbd>R</kbd></button>
+        ${SHARE_BUTTON}
         <button class="nav btn ghost" data-action="menu">Menu</button>
       </div>
     </div>
   </div>`;
 }
 
-export function pauseScreen(title: string): string {
+export function pauseScreen(title: string, ghost: { available: boolean; on: boolean }): string {
   return `
   <div class="screen pause-screen">
     <div class="panel small">
@@ -146,6 +171,7 @@ export function pauseScreen(title: string): string {
       <div class="actions column">
         <button class="nav btn primary" data-action="resume">Resume</button>
         <button class="nav btn" data-action="restart">Restart <kbd>R</kbd></button>
+        <button class="nav btn" data-action="toggle-ghost">Ghost: ${ghost.on ? 'On' : 'Off'}<small>${ghost.available ? 'best run' : 'no run yet'} · G</small></button>
         <button class="nav btn" data-action="settings">Settings</button>
         <button class="nav btn ghost" data-action="quit">Quit</button>
       </div>
@@ -170,7 +196,7 @@ export function settingsScreen(s: Settings): string {
         ${slider('music', 'Music')}
         ${slider('sfx', 'Sound effects')}
         ${toggle('jumpAssist', 'Jump assist', 'Auto-jumps at edges. Great for learning a road.')}
-        ${toggle('ghost', 'Ghost replays', 'Race your best run (toggle in-game with G).')}
+        ${toggle('ghost', 'Holographic ghost', 'Replays your fastest run on every road as a hologram (G in-game).')}
         ${toggle('shake', 'Camera effects', 'Screen shake and speed FOV. Turn off for reduced motion.')}
         ${toggle('bloom', 'Bloom glow', 'Neon glow post-processing.')}
         ${select('quality', 'Resolution', [['high', 'Sharp'], ['low', 'Fast']])}
@@ -212,7 +238,8 @@ export function helpScreen(): string {
             <li><b>Fuel</b> burns with distance travelled.</li>
             <li><b>Gravity</b> (G) changes per road: low G floats, high G barely hops.</li>
             <li>Hitting a wall head-on at speed destroys the ship. Brush it slowly and you'll just bump.</li>
-            <li>Finish fast for <b>Silver</b>, <b>Gold</b> and the elusive <b>Neon</b> medal. Your best run becomes a ghost.</li>
+            <li>Finish fast for <b>Silver</b>, <b>Gold</b> and the elusive <b>Neon</b> medal. Your fastest run is saved automatically and races you as a <b>holographic ghost</b> (toggle with <kbd>G</kbd>).</li>
+            <li>Clear a road to set off fireworks, then <b>Share on X</b> to post your scorecard.</li>
           </ul>
         </div>
       </div>

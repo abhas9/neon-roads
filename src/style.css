@@ -283,3 +283,26 @@ input[type=range] { width: 180px; accent-color: var(--pink); }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } }
 @media (max-width: 720px) { .phone-grid { grid-template-columns: 1fr; } .qr-wrap { max-width: 260px; margin: 0 auto; } }
 .screen.no-anim { animation: none; }
+
+/* ---------- ghost, celebration and sharing ---------- */
+.chip.ghost-chip { color: #8ffcff; border-color: rgba(47,243,255,.45); text-shadow: 0 0 8px #2ff3ff; }
+.chip.ghost-chip.off { color: var(--dim); border-color: var(--line); text-shadow: none; }
+.results-screen { background: radial-gradient(ellipse at 50% 40%, rgba(7,2,26,.15), rgba(7,2,26,.55)); }
+.results-screen .panel { background: rgba(12, 6, 32, 0.72); }
+.run-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 22px; max-width: 420px; margin: 16px auto 4px; text-align: left; }
+.stat-meter { display: grid; grid-template-columns: 38px 1fr 40px; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+.stat-meter i { height: 8px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; transform: skewX(-20deg); }
+.stat-meter b { display: block; height: 100%; }
+.stat-meter.fuel b { background: linear-gradient(90deg, #ff7a1f, #ffd23f); box-shadow: 0 0 8px #ffae3c; }
+.stat-meter.o2 b { background: linear-gradient(90deg, #2f7bff, #2ff3ff); box-shadow: 0 0 8px #2ff3ff; }
+.stat-meter em { font-style: normal; text-align: right; font-family: var(--display); font-size: 12px; }
+.stat-pair { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; }
+.stat-pair span { color: var(--dim); }
+.stat-pair b { font-family: var(--display); font-size: 14px; }
+.ghost-note { color: #9ff6ff; font-weight: 600; font-size: 15px; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.holo-dot { width: 9px; height: 9px; border-radius: 50%; background: #2ff3ff; box-shadow: 0 0 10px #2ff3ff; animation: blink 1.2s ease-in-out infinite; }
+.linkish { appearance: none; background: none; border: 0; color: var(--cyan); font: inherit; text-decoration: underline; cursor: pointer; padding: 0; outline: none; }
+.linkish:focus { box-shadow: 0 0 0 2px var(--cyan); border-radius: 2px; }
+.btn.share-x { border-color: rgba(255,255,255,.5); background: linear-gradient(90deg, #0b0b0f, #1c1c24); justify-content: center; }
+.btn.share-x:hover, .btn.share-x:focus { border-color: #fff; background: linear-gradient(90deg, #15151c, #2b2b36); }
+.x-mark { font-size: 18px; font-weight: 900; line-height: 1; margin-right: 2px; }

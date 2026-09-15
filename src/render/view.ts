@@ -19,7 +19,8 @@ import { buildRoadChunk, paletteColors } from './roadMesh';
 import type { PaletteColors } from './roadMesh';
 import { Sky } from './sky';
 import { createShipModel } from './shipMesh';
-import { Debris, Rings, Sparks, SpeedLines } from './fx';
+import { Debris, Fireworks, Rings, Sparks, SpeedLines } from './fx';
+import { HoloLabel } from './hologram';
 import { buildProps } from './props';
 
 const CHUNK = 24;
@@ -114,6 +115,13 @@ export class GameView {
   private sup: Support = { found: false, height: 0, tile: Tile.Normal };
   private settings: ViewSettings = { bloom: true, post: true, shake: true, pixelRatio: Math.min(window.devicePixelRatio, 2) };
   private squash = 0;
+  private fireworks = new Fireworks();
+  private ghostLabel = new HoloLabel();
+  private celebrating = false;
+  private celebrateCenter = new THREE.Vector3();
+  private orbitAngle = 0;
+  private ghostPos = new THREE.Vector3();
+  private ghostLabelText: string | null = null;
   private bloomBroken = false;
   private deathHandled = false;
 
@@ -160,6 +168,7 @@ export class GameView {
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.9).rotateX(-Math.PI / 2), shadowMat);
     this.ghostShadow = new THREE.Mesh(this.shadow.geometry, shadowMat.clone());
     this.scene.add(this.shadow, this.ghostShadow);
+    this.scene.add(this.fireworks.sparks.points, this.ghostLabel.sprite);
     this.scene.add(this.sparks.points, this.debris.group, this.rings.group, this.speedLines.lines, this.finishGate, this.bestMarker);
 
     this.resize();
@@ -202,6 +211,8 @@ export class GameView {
 
   resetRun(): void {
     this.sparks.clear();
+    this.fireworks.clear();
+    this.celebrating = false;
     this.debris.clear();
     this.ship.group.visible = true;
     this.shake = 0;
@@ -337,6 +348,13 @@ export class GameView {
       this.sparks.burst(shipPos, 30, 2.5, new THREE.Color('#61d4ff'), 0.9, 0.09, -2);
     }
     if (ev & Ev.Bump) this.addShake(0.12);
+    if (ev & Ev.Finish && this.road && Number.isFinite(this.road.length)) {
+      this.celebrating = true;
+      this.celebrateCenter.set(0, 1.2, -this.road.length * ROW_D);
+      this.orbitAngle = Math.atan2(this.camPos.x - this.celebrateCenter.x, this.camPos.z - this.celebrateCenter.z);
+      this.fireworks.start(this.celebrateCenter, this.edgeColor, 1);
+      this.flash = 0.25;
+    }
     if (s.phase === 'dead' && !this.deathHandled) {
       this.deathHandled = true;
       const p = shipPos.clone();
@@ -359,7 +377,29 @@ export class GameView {
 
     this.ghost.group.visible = !!f.ghost && f.ghost.phase !== 'dead';
     this.ghostShadow.visible = false;
-    if (f.ghost && f.ghostPrev && this.ghost.group.visible) this.placeShip(this.ghost, this.ghostShadow, f.ghost, f.ghostPrev, f.alpha, true);
+    if (f.ghost && f.ghostPrev && this.ghost.group.visible) {
+      this.ghostPos.copy(this.placeShip(this.ghost, this.ghostShadow, f.ghost, f.ghostPrev, f.alpha, true));
+      // Fade the hologram when it overlaps the player so it never hides the real ship.
+      const d = this.ghostPos.distanceTo(shipPos);
+      const k = THREE.MathUtils.smoothstep(d, 0.4, 2.2);
+      const holo = this.ghost.hologram!;
+      holo.uniforms.uTime.value = this.time;
+      holo.uniforms.uOpacity.value = 0.25 + 0.75 * k;
+      this.ghost.edges!.opacity = 0.2 + 0.6 * k;
+      this.ghostLabel.sprite.position.set(this.ghostPos.x, this.ghostPos.y + 0.55, this.ghostPos.z);
+      (this.ghostLabel.sprite.material as THREE.SpriteMaterial).opacity = 0.35 + 0.65 * k;
+      if (Math.random() < 0.35 && f.ghost.vz > 2) {
+        this.sparks.emit(
+          new THREE.Vector3(this.ghostPos.x + (Math.random() - 0.5) * 0.35, this.ghostPos.y + 0.08, this.ghostPos.z + 0.4),
+          new THREE.Vector3(0, 0.2, 1.2),
+          new THREE.Color('#2ff3ff').multiplyScalar(0.35),
+          0.3,
+          0.05,
+          3,
+        );
+      }
+    }
+    this.ghostLabel.sprite.visible = this.ghost.group.visible && this.ghostLabelText !== null;
 
     // Thrusters and trail.
     const thrust = s.phase === 'dead' ? 0 : Math.max(0.15, f.throttle * 0.7 + (s.vz / V_MAX) * 0.5 + (s.phase === 'finished' ? 1 : 0));
@@ -375,6 +415,7 @@ export class GameView {
     this.sparks.update(dt);
     this.debris.update(dt);
     this.rings.update(dt);
+    this.fireworks.update(dt);
 
     // Camera.
     const speedK = s.vz / V_MAX;
@@ -388,6 +429,13 @@ export class GameView {
     if (s.phase === 'dead') {
       // Hold position and look at the wreck.
       this.camLook.lerp(new THREE.Vector3(shipPos.x, Math.max(shipPos.y, -3), shipPos.z), 1 - Math.exp(-dt * 3));
+    } else if (s.phase === 'finished' && this.celebrating) {
+      // Slow orbit around the finish gate while the fireworks go off.
+      this.orbitAngle += dt * 0.22;
+      const c = this.celebrateCenter;
+      const target = new THREE.Vector3(c.x + Math.sin(this.orbitAngle) * 11, c.y + 2.2, c.z + Math.cos(this.orbitAngle) * 11);
+      this.camPos.lerp(target, 1 - Math.exp(-dt * 1.4));
+      this.camLook.lerp(new THREE.Vector3(c.x, c.y + 3.6, c.z), 1 - Math.exp(-dt * 2));
     } else if (s.phase === 'finished') {
       this.camLook.lerp(shipPos, 1 - Math.exp(-dt * 4));
       this.camPos.y += dt * 0.4;
@@ -450,11 +498,38 @@ export class GameView {
     this.roadMat.uniforms.uShip.value.set(0, -99, 0);
     this.sparks.update(dt);
     this.rings.update(dt);
+    this.fireworks.update(dt);
+    this.ghostLabel.sprite.visible = false;
     this.sky.update(this.time, this.camera);
     this.final.uniforms.uFlash.value = 0;
     this.final.uniforms.uAberration.value = 0.15;
     this.speedLines.update(dt, this.camera.position, 0, 0);
     this.present(dt);
+  }
+
+  /** Text above the ghost hologram, e.g. its best time; null hides the label. */
+  setGhostLabel(text: string | null): void {
+    this.ghostLabelText = text;
+    this.ghostLabel.set(text);
+  }
+
+  /** Extra fireworks, e.g. when the medal is revealed. */
+  celebrate(extraShells: number): void {
+    if (this.celebrating) this.fireworks.salvo(extraShells);
+  }
+
+  stopCelebration(): void {
+    this.fireworks.stop();
+  }
+
+  set onFirework(cb: ((kind: 'launch' | 'burst', strength: number) => void) | null) {
+    this.fireworks.onLaunch = cb ? () => cb('launch', 1) : null;
+    this.fireworks.onBurst = cb ? (k) => cb('burst', k) : null;
+  }
+
+  /** Live and scheduled firework rockets (used by automated checks). */
+  get fireworkLoad(): number {
+    return this.fireworks.load;
   }
 
   addShake(a: number): void {

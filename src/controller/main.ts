@@ -253,6 +253,7 @@ class PadApp {
       <header class="bar">
         <span class="dot"></span><span class="bar-status">Connected</span><span class="bar-rtt"></span>
         <div class="hud-mini"><i class="o2"><b></b></i><i class="fuel"><b></b></i></div>
+        <button class="chip" data-btn="ghost" title="Toggle ghost">👻</button>
         <button class="chip" data-btn="restart">⟲</button>
         <button class="chip" data-btn="pause">❚❚</button>
         <button class="chip" data-act="settings">⚙</button>

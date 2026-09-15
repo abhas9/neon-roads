@@ -1,22 +1,32 @@
 import * as THREE from 'three';
 
-const MAX_SPARKS = 1400;
-
-/** Pooled additive point particles for sparks, thruster trails and pickups. */
+/** Pooled additive point particles for sparks, thruster trails, pickups and fireworks. */
 export class Sparks {
   readonly points: THREE.Points;
-  private pos = new Float32Array(MAX_SPARKS * 3);
-  private vel = new Float32Array(MAX_SPARKS * 3);
-  private col = new Float32Array(MAX_SPARKS * 3);
-  private life = new Float32Array(MAX_SPARKS);
-  private maxLife = new Float32Array(MAX_SPARKS);
-  private drag = new Float32Array(MAX_SPARKS);
-  private grav = new Float32Array(MAX_SPARKS);
-  private size = new Float32Array(MAX_SPARKS);
+  private readonly max: number;
+  private pos: Float32Array;
+  private vel: Float32Array;
+  private col: Float32Array;
+  private base: Float32Array;
+  private life: Float32Array;
+  private maxLife: Float32Array;
+  private drag: Float32Array;
+  private grav: Float32Array;
+  private size: Float32Array;
   private cursor = 0;
   private geo: THREE.BufferGeometry;
 
-  constructor() {
+  constructor(max = 1400) {
+    this.max = max;
+    this.pos = new Float32Array(max * 3);
+    this.vel = new Float32Array(max * 3);
+    this.col = new Float32Array(max * 3);
+    this.base = new Float32Array(max * 3);
+    this.life = new Float32Array(max);
+    this.maxLife = new Float32Array(max);
+    this.drag = new Float32Array(max);
+    this.grav = new Float32Array(max);
+    this.size = new Float32Array(max);
     this.geo = new THREE.BufferGeometry();
     this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
@@ -53,10 +63,11 @@ export class Sparks {
 
   emit(p: THREE.Vector3, v: THREE.Vector3, color: THREE.Color, life: number, size: number, drag = 1.5, gravity = 0): void {
     const i = this.cursor;
-    this.cursor = (this.cursor + 1) % MAX_SPARKS;
+    this.cursor = (this.cursor + 1) % this.max;
     this.pos.set([p.x, p.y, p.z], i * 3);
     this.vel.set([v.x, v.y, v.z], i * 3);
     this.col.set([color.r, color.g, color.b], i * 3);
+    this.base.set([color.r, color.g, color.b], i * 3);
     this.life[i] = this.maxLife[i] = life;
     this.drag[i] = drag;
     this.grav[i] = gravity;
@@ -72,12 +83,16 @@ export class Sparks {
   }
 
   update(dt: number): void {
-    for (let i = 0; i < MAX_SPARKS; i++) {
+    for (let i = 0; i < this.max; i++) {
       if (this.life[i] <= 0) continue;
       this.life[i] -= dt;
       const k = Math.max(0, this.life[i] / this.maxLife[i]);
       const d = Math.exp(-this.drag[i] * dt);
       const j = i * 3;
+      const fade = 0.2 + 0.8 * k;
+      this.col[j] = this.base[j] * fade;
+      this.col[j + 1] = this.base[j + 1] * fade;
+      this.col[j + 2] = this.base[j + 2] * fade;
       this.vel[j] *= d;
       this.vel[j + 1] = this.vel[j + 1] * d - this.grav[i] * dt;
       this.vel[j + 2] *= d;
@@ -225,5 +240,168 @@ export class SpeedLines {
     }
     this.lines.geometry.attributes.position.needsUpdate = true;
     this.mat.opacity = intensity * 0.5;
+  }
+}
+
+type ShellKind = 'peony' | 'ring' | 'willow' | 'crackle';
+
+interface Shell {
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  fuse: number;
+  color: THREE.Color;
+  kind: ShellKind;
+}
+
+const FIREWORK_COLORS = ['#ff2fb4', '#2ff3ff', '#ffd23f', '#7cff6a', '#b14bff', '#ff7a3c', '#ffffff'];
+
+/** Victory fireworks: rockets with trails that burst into peony, ring, willow and crackle patterns. */
+export class Fireworks {
+  readonly sparks = new Sparks(5000);
+  private shells: Shell[] = [];
+  private queue: { at: number; x: number; z: number }[] = [];
+  private pending: { at: number; pos: THREE.Vector3; color: THREE.Color }[] = [];
+  private time = 0;
+  private active = false;
+  private nextAmbient = 0;
+  private center = new THREE.Vector3();
+  private accent = new THREE.Color('#ff2fb4');
+  private tmpV = new THREE.Vector3();
+  onLaunch: (() => void) | null = null;
+  onBurst: ((strength: number) => void) | null = null;
+
+  get running(): boolean {
+    return this.active || this.shells.length > 0;
+  }
+
+  /** Number of live rockets plus scheduled launches (for tests). */
+  get load(): number {
+    return this.shells.length + this.queue.length;
+  }
+
+  start(center: THREE.Vector3, accent: THREE.Color, intensity: number): void {
+    this.center.copy(center);
+    this.accent.copy(accent);
+    this.active = true;
+    this.time = 0;
+    const count = 8 + Math.round(intensity * 5);
+    for (let i = 0; i < count; i++) {
+      this.queue.push({ at: i * 0.14 + Math.random() * 0.1, x: (Math.random() - 0.5) * 14, z: (Math.random() - 0.5) * 10 });
+    }
+    this.nextAmbient = count * 0.14 + 0.5;
+  }
+
+  /** Adds a finale salvo, e.g. when a medal is awarded. */
+  salvo(size: number): void {
+    for (let i = 0; i < size; i++) this.queue.push({ at: this.time + 0.1 + i * 0.08, x: (Math.random() - 0.5) * 16, z: (Math.random() - 0.5) * 10 });
+  }
+
+  stop(): void {
+    this.active = false;
+    this.queue.length = 0;
+  }
+
+  clear(): void {
+    this.stop();
+    this.shells.length = 0;
+    this.pending.length = 0;
+    this.sparks.clear();
+  }
+
+  private launch(x: number, z: number): void {
+    const color = Math.random() < 0.3 ? this.accent.clone() : new THREE.Color(FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)]);
+    const kinds: ShellKind[] = ['peony', 'peony', 'ring', 'willow', 'crackle'];
+    this.shells.push({
+      pos: new THREE.Vector3(this.center.x + x, this.center.y - 1, this.center.z + z),
+      vel: new THREE.Vector3((Math.random() - 0.5) * 2, 10 + Math.random() * 3.5, (Math.random() - 0.5) * 2),
+      fuse: 0.6 + Math.random() * 0.35,
+      color,
+      kind: kinds[Math.floor(Math.random() * kinds.length)],
+    });
+    this.onLaunch?.();
+  }
+
+  private burst(sh: Shell): void {
+    const s = this.sparks;
+    const v = this.tmpV;
+    const white = new THREE.Color('#ffffff');
+    switch (sh.kind) {
+      case 'peony':
+        for (let i = 0; i < 150; i++) {
+          v.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(6 + Math.random() * 3);
+          s.emit(sh.pos, v, i % 9 === 0 ? white : sh.color, 1.3 + Math.random() * 0.6, 0.2, 1.1, 3.5);
+        }
+        break;
+      case 'ring': {
+        const axis = new THREE.Vector3(Math.random() - 0.5, 1, Math.random() - 0.5).normalize();
+        const u = new THREE.Vector3(1, 0, 0).cross(axis).normalize();
+        const w = axis.clone().cross(u);
+        for (let i = 0; i < 90; i++) {
+          const a = (i / 90) * Math.PI * 2;
+          v.copy(u).multiplyScalar(Math.cos(a) * 8).addScaledVector(w, Math.sin(a) * 8);
+          s.emit(sh.pos, v, sh.color, 1.4, 0.22, 1.3, 2.5);
+        }
+        break;
+      }
+      case 'willow': {
+        const gold = new THREE.Color('#ffc861');
+        for (let i = 0; i < 130; i++) {
+          v.set(Math.random() * 2 - 1, Math.random() * 1.6 - 0.4, Math.random() * 2 - 1).normalize().multiplyScalar(4 + Math.random() * 3);
+          s.emit(sh.pos, v, gold, 2.4 + Math.random() * 0.8, 0.16, 0.8, 5);
+        }
+        break;
+      }
+      case 'crackle':
+        for (let i = 0; i < 70; i++) {
+          v.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(5 + Math.random() * 2);
+          s.emit(sh.pos, v, sh.color, 0.8, 0.18, 1.4, 3);
+        }
+        for (let i = 0; i < 6; i++) {
+          const p = sh.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 6));
+          this.pending.push({ at: this.time + 0.55 + Math.random() * 0.4, pos: p, color: white });
+        }
+        break;
+    }
+    // Bright flash core.
+    for (let i = 0; i < 12; i++) {
+      v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+      s.emit(sh.pos, v, white, 0.25, 0.9, 4, 0);
+    }
+    this.onBurst?.(sh.kind === 'willow' ? 0.7 : 1);
+  }
+
+  update(dt: number): void {
+    this.time += dt;
+    for (let i = this.queue.length - 1; i >= 0; i--) {
+      if (this.queue[i].at <= this.time) {
+        this.launch(this.queue[i].x, this.queue[i].z);
+        this.queue.splice(i, 1);
+      }
+    }
+    if (this.active && this.time >= this.nextAmbient) {
+      this.launch((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 12);
+      this.nextAmbient = this.time + 0.45 + Math.random() * 0.6;
+    }
+    for (let i = this.shells.length - 1; i >= 0; i--) {
+      const sh = this.shells[i];
+      sh.vel.y -= 9 * dt;
+      sh.pos.addScaledVector(sh.vel, dt);
+      sh.fuse -= dt;
+      this.sparks.emit(sh.pos, this.tmpV.set((Math.random() - 0.5) * 0.6, -1.5, (Math.random() - 0.5) * 0.6), sh.color, 0.45, 0.1, 2, 1);
+      if (sh.fuse <= 0) {
+        this.burst(sh);
+        this.shells.splice(i, 1);
+      }
+    }
+    for (let i = this.pending.length - 1; i >= 0; i--) {
+      const p = this.pending[i];
+      if (p.at > this.time) continue;
+      for (let k = 0; k < 14; k++) {
+        this.tmpV.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(2.5);
+        this.sparks.emit(p.pos, this.tmpV, p.color, 0.35, 0.14, 2.5, 2);
+      }
+      this.pending.splice(i, 1);
+    }
+    this.sparks.update(dt);
   }
 }

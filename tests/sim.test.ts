@@ -140,6 +140,36 @@ describe('ship sim', () => {
   });
 });
 
+describe('ghost replay', () => {
+  it('replays a run recorded with jump assist only when the assist flag is replayed too', () => {
+    const road = parseRoad(meta, '=======*30\n.......*4\n=======*20\n..===..*20\n.......*3\n=======*60');
+    const tape = new InputTape();
+    const q: InputFrame = { steer: 0, throttle: 0, jump: false };
+    const live = new ShipState();
+    live.reset(road);
+    for (let i = 0; i < 20 / DT && live.phase === 'alive'; i++) {
+      quantize({ steer: 0, throttle: 1, jump: false }, q);
+      tape.push(q);
+      stepShip(road, live, q, { jumpAssist: true });
+    }
+    expect(live.phase).toBe('finished');
+
+    const replay = (assist: boolean) => {
+      const g = new ShipState();
+      g.reset(road);
+      const t = InputTape.decode(tape.encode());
+      const f: InputFrame = { steer: 0, throttle: 0, jump: false };
+      for (let i = 0; i < t.length; i++) stepShip(road, g, t.read(i, f), { jumpAssist: assist });
+      return g;
+    };
+    const synced = replay(true);
+    expect(synced.phase).toBe('finished');
+    expect(synced.time).toBe(live.time);
+    // Without the recorded assist flag the ghost falls into the first gap.
+    expect(replay(false).phase).toBe('dead');
+  });
+});
+
 describe('road format', () => {
   it('expands groups and trailing comments', () => {
     const road = parseRoad(meta, `=======*2\n{\n=-=-=-=\n.......*2\n}*3  \nHHHHHHH # wall`);

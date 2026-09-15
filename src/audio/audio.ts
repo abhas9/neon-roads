@@ -168,6 +168,16 @@ export class AudioEngine {
   medal(level: number): void {
     for (let i = 0; i < level; i++) this.tone('sine', 1046 * Math.pow(2, (i * 5) / 12), 1046 * Math.pow(2, (i * 5) / 12), 0.3, 0.12, 0.15 * i);
   }
+  fireworkLaunch(): void {
+    this.tone('sine', 520 + Math.random() * 200, 1500 + Math.random() * 500, 0.7, 0.025);
+    this.noiseHit(0.5, 0.03, 'highpass', 4000, 8000);
+  }
+  fireworkBurst(strength: number): void {
+    this.noiseHit(0.9, 0.22 * strength, 'lowpass', 1800, 90);
+    this.tone('sine', 70, 34, 0.5, 0.25 * strength);
+    // Crackle tail.
+    for (let i = 0; i < 7; i++) this.noiseHit(0.05, 0.05, 'highpass', 5000, 3000, 0.25 + Math.random() * 0.6);
+  }
   ui(kind: 'move' | 'confirm' | 'back'): void {
     if (kind === 'move') this.tone('square', 1200, 1200, 0.025, 0.03);
     else if (kind === 'confirm') {

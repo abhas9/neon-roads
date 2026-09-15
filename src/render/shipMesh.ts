@@ -1,13 +1,23 @@
 import * as THREE from 'three';
+import { createHologramMaterial } from './hologram';
 
 /** Original low-poly hover racer built from code: arrow hull, twin engine pods, glass canopy. */
-export function createShipModel(opts: { ghost?: boolean } = {}): { group: THREE.Group; flames: THREE.Mesh[]; hull: THREE.Mesh } {
+export interface ShipModel {
+  group: THREE.Group;
+  flames: THREE.Mesh[];
+  hull: THREE.Mesh;
+  /** Set for ghost models: the shared hologram material and wireframe edge material. */
+  hologram: THREE.ShaderMaterial | null;
+  edges: THREE.LineBasicMaterial | null;
+}
+
+/** Original low-poly hover racer built from code. The ghost variant renders as a hologram. */
+export function createShipModel(opts: { ghost?: boolean } = {}): ShipModel {
   const group = new THREE.Group();
   const ghost = !!opts.ghost;
+  const holo = ghost ? createHologramMaterial() : null;
 
-  const hullMat = ghost
-    ? new THREE.MeshBasicMaterial({ color: '#9fe8ff', transparent: true, opacity: 0.28, depthWrite: false })
-    : new THREE.MeshStandardMaterial({ color: '#dfe6f2', metalness: 0.55, roughness: 0.32, flatShading: true });
+  const hullMat = holo ?? new THREE.MeshStandardMaterial({ color: '#dfe6f2', metalness: 0.55, roughness: 0.32, flatShading: true });
   const accentMat = ghost
     ? hullMat
     : new THREE.MeshStandardMaterial({ color: '#ff2fb4', emissive: '#ff2fb4', emissiveIntensity: 1.6, flatShading: true });
@@ -83,5 +93,21 @@ export function createShipModel(opts: { ghost?: boolean } = {}): { group: THREE.
       flames.push(flame);
     }
   }
-  return { group, flames, hull };
+  let edges: THREE.LineBasicMaterial | null = null;
+  if (ghost) {
+    // Glowing wireframe edges give the hologram a readable silhouette at speed.
+    edges = new THREE.LineBasicMaterial({ color: '#8ffcff', transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false });
+    const meshes: THREE.Mesh[] = [];
+    group.traverse((o) => {
+      if (o instanceof THREE.Mesh) meshes.push(o);
+    });
+    for (const m of meshes) {
+      const lines = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 25), edges);
+      lines.position.copy(m.position);
+      lines.rotation.copy(m.rotation);
+      lines.scale.copy(m.scale);
+      group.add(lines);
+    }
+  }
+  return { group, flames, hull, hologram: holo, edges };
 }

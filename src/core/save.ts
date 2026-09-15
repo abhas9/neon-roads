@@ -13,6 +13,8 @@ export interface RoadRecord {
   best: number;
   medal: number;
   ghost?: string;
+  /** Jump assist state the ghost tape was recorded with. */
+  ghostAssist?: boolean;
   completions: number;
   attempts: number;
 }
@@ -22,7 +24,7 @@ export interface SaveData {
   roads: Record<string, RoadRecord>;
   settings: Settings;
   endless: { best: number };
-  daily: Record<string, { best: number; ghost?: string; attempts: number }>;
+  daily: Record<string, { best: number; ghost?: string; ghostAssist?: boolean; attempts: number }>;
   seenHelp: boolean;
 }
 

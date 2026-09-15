@@ -10,7 +10,9 @@ import { EndlessRoad, dailySeed } from './levels/procedural';
 import PARS from './levels/pars.json';
 import { Session, DEATH_TEXT } from './game/session';
 import type { RunConfig, RunResult } from './game/session';
-import { medalFor } from './game/medals';
+import { formatTime, medalFor } from './game/medals';
+import { copyToClipboard, gameUrl, postIntentUrl, postText, scorecard } from './game/share';
+import type { Score } from './game/share';
 import { InputTape } from './sim/replay';
 import { Hud } from './ui/hud';
 import { TouchControls } from './ui/touch';
@@ -44,6 +46,9 @@ class App {
   private remote = new RemoteHost();
   private hudPush = 0;
   private toastEl: HTMLElement;
+  private lastScore: Score | null = null;
+  /** Present only when an automated test injects `window.__neonTest` before load. */
+  private test = (window as unknown as { __neonTest?: NeonTestHook }).__neonTest;
 
   constructor() {
     this.hud = new Hud(this.ui);
@@ -57,6 +62,11 @@ class App {
     this.toastEl.className = 'toast hidden';
     this.ui.appendChild(this.toastEl);
     this.bindRemote();
+    this.view.onFirework = (kind, strength) => (kind === 'launch' ? this.audio.fireworkLaunch() : this.audio.fireworkBurst(strength));
+    if (this.test) {
+      this.test.fireworkLoad = () => this.view.fireworkLoad;
+      this.test.screen = () => this.screen;
+    }
 
     this.applySettings();
     this.bindInput();
@@ -185,9 +195,7 @@ class App {
     this.input.on('pause', () => {
       if (this.screen === 'playing' || this.screen === 'paused') this.togglePause();
     });
-    this.input.on('ghost', () => {
-      this.session.showGhost = !this.session.showGhost;
-    });
+    this.input.on('ghost', () => this.toggleGhost());
     this.input.on('any', () => {
       if (this.screen === 'playing') this.session.skipDeath();
     });
@@ -245,7 +253,7 @@ class App {
     switch (name) {
       case 'campaign':
       case 'worlds':
-        this.session.stop();
+        this.leaveRun();
         this.show('worlds');
         break;
       case 'daily': {
@@ -290,12 +298,18 @@ class App {
       case 'resume':
         this.togglePause();
         break;
+      case 'toggle-ghost':
+        this.toggleGhost();
+        break;
+      case 'share':
+        this.share();
+        break;
       case 'restart':
         this.restartRun();
         break;
       case 'quit':
       case 'menu':
-        this.session.stop();
+        this.leaveRun();
         this.show(this.current?.mode === 'campaign' ? 'worlds' : 'title');
         break;
       case 'retry':
@@ -332,7 +346,7 @@ class App {
         html = S.helpScreen();
         break;
       case 'paused':
-        html = S.pauseScreen(this.session.cfg?.title ?? '');
+        html = S.pauseScreen(this.session.cfg?.title ?? '', { available: !!this.session.cfg?.ghost, on: this.settings.ghost });
         break;
       case 'playing':
         html = '';
@@ -451,6 +465,9 @@ class App {
       title: `${world + 1}-${road + 1} · ${def.name}`,
       subtitle: `${w.name.toUpperCase()} · G ${def.gravity} · O₂ ${def.oxygen}s`,
       ghost: rec?.ghost ? InputTape.decode(rec.ghost) : null,
+      ghostAssist: rec?.ghostAssist ?? false,
+      ghostTime: rec?.completions ? rec.best : null,
+      inputTape: this.takeAutoplay(id),
       par: pars[id] ?? null,
       best: rec?.best ?? null,
       bestDistance: null,
@@ -474,6 +491,8 @@ class App {
       title: mode === 'daily' ? `Daily Run · ${label}` : 'Endless',
       subtitle: mode === 'daily' ? 'Same road for everyone today · how far can you go?' : `${w.name.toUpperCase()} · supplies every few hundred metres`,
       ghost: mode === 'daily' && daily?.ghost ? InputTape.decode(daily.ghost) : null,
+      ghostAssist: daily?.ghostAssist ?? false,
+      ghostTime: null,
       par: null,
       best: null,
       bestDistance: mode === 'daily' ? daily?.best ?? null : this.save.endless.best || null,
@@ -484,6 +503,7 @@ class App {
 
   private beginRun(cfg: RunConfig, music: number): void {
     this.session.start(cfg);
+    this.view.setGhostLabel(cfg.ghost ? (cfg.ghostTime ? `BEST ${formatTime(cfg.ghostTime)}` : cfg.bestDistance ? `BEST ${cfg.bestDistance} m` : 'BEST RUN') : null);
     this.audio.playMusic(music, 0.5);
     this.show('playing');
   }
@@ -514,10 +534,52 @@ class App {
       road = 0;
     }
     if (world >= WORLDS.length || !S.isRoadUnlocked(WORLDS, this.save, world, road)) {
+      this.leaveRun();
       this.show('worlds');
       return;
     }
     this.startCampaign(world, road);
+  }
+
+  /** Ends the current run (or its celebration) and keeps the menu backdrop in the same world. */
+  private leaveRun(): void {
+    const wasActive = !!this.session.cfg;
+    this.session.stop();
+    this.view.stopCelebration();
+    if (wasActive && this.current) {
+      this.menuWorld = -2;
+      this.setMenuWorld(this.current.world);
+    }
+  }
+
+  private toggleGhost(): void {
+    this.settings.ghost = !this.settings.ghost;
+    this.persist();
+    this.toast(this.settings.ghost ? '👻 Holographic ghost on' : 'Ghost off');
+    if (this.screen === 'paused') this.show('paused');
+    const toggle = this.screenEl.querySelector('[data-action="toggle-ghost"]');
+    if (toggle && this.screen === 'results') toggle.textContent = this.settings.ghost ? 'Turn ghosts off' : 'Turn ghosts on';
+  }
+
+  private share(): void {
+    const score = this.lastScore;
+    if (!score) return;
+    const url = gameUrl();
+    const card = scorecard(score, url);
+    const intent = postIntentUrl(postText(score), url);
+    // Copy first, synchronously, while this page still has focus; then open the post composer.
+    const copied = copyToClipboard(card);
+    const win = window.open(intent, '_blank');
+    if (win) win.opener = null;
+    if (this.test) this.test.lastShare = { card, intent, opened: !!win };
+    this.toast(win ? (copied ? '📋 Scorecard copied — paste it into your post' : 'Opening X…') : '📋 Scorecard copied — allow pop-ups to open X');
+  }
+
+  private takeAutoplay(roadIdToPlay: string): InputTape | null {
+    const auto = this.test?.autoplay;
+    if (!auto || auto.roadId !== roadIdToPlay) return null;
+    this.test!.autoplay = undefined;
+    return InputTape.decode(auto.tape);
   }
 
   private togglePause(): void {
@@ -534,9 +596,6 @@ class App {
     const c = this.current;
     const cfg = this.session.cfg;
     if (!c || !cfg) return;
-    // Keep the backdrop in the world that was just played.
-    this.menuWorld = -2;
-    this.setMenuWorld(c.world);
     if (c.mode === 'campaign') {
       const id = cfg.roadId;
       const rec = (this.save.roads[id] ??= { best: Infinity, medal: 0, completions: 0, attempts: 0 });
@@ -547,13 +606,32 @@ class App {
       rec.completions++;
       rec.attempts += this.session.attempts;
       if (newRecord) {
+        // The fastest run on every road becomes the ghost.
         rec.best = r.time;
         rec.ghost = r.tape.encode();
+        rec.ghostAssist = r.assist;
       }
       rec.medal = Math.max(rec.medal, medal);
       this.persist();
       const hasNext = c.road + 1 < WORLDS[c.world].roads.length || c.world + 1 < WORLDS.length;
-      this.session.stop();
+      const def = WORLDS[c.world].roads[c.road];
+      this.lastScore = {
+        kind: 'road',
+        roadCode: `${c.world + 1}-${c.road + 1}`,
+        roadName: def.name,
+        worldName: WORLDS[c.world].name,
+        time: r.time,
+        par,
+        medal,
+        fuel: r.fuel,
+        oxygen: r.oxygen,
+        topSpeed: r.topSpeed * 10,
+        jumps: r.jumps,
+        attempts: this.session.attempts,
+        newRecord: newRecord && !!prevBest,
+        assist: r.assist,
+      };
+      // The session keeps rendering the fly-out and fireworks behind the results panel.
       this.showHtml(
         S.resultsScreen({
           roadName: `${c.world + 1}-${c.road + 1} · ${WORLDS[c.world].roads[c.road].name}`,
@@ -566,10 +644,18 @@ class App {
           hasNext,
           attempts: this.session.attempts,
           assist: r.assist,
+          fuel: r.fuel,
+          oxygen: r.oxygen,
+          topSpeed: r.topSpeed * 10,
+          jumps: r.jumps,
+          ghostOn: this.settings.ghost,
         }),
         'results',
       );
-      setTimeout(() => this.audio.medal(medal), 350);
+      setTimeout(() => {
+        this.audio.medal(medal);
+        this.view.celebrate(medal * 3);
+      }, 350);
     } else {
       const daily = c.mode === 'daily';
       let best: number;
@@ -580,6 +666,7 @@ class App {
         if (r.distance > rec.best) {
           rec.best = r.distance;
           rec.ghost = r.tape.encode();
+          rec.ghostAssist = r.assist;
           newRecord = true;
         }
         best = rec.best;
@@ -592,7 +679,8 @@ class App {
       }
       this.persist();
       const [title, sub] = r.cause ? DEATH_TEXT[r.cause] : ['RUN OVER', ''];
-      this.session.stop();
+      this.lastScore = { kind: 'distance', daily, label: c.label, distance: r.distance, best, time: r.time, newRecord, endedBy: title };
+      this.leaveRun();
       this.showHtml(S.endlessResults({ daily, label: c.label, distance: r.distance, best, newRecord, cause: title, sub, time: r.time }), 'results');
     }
   }
@@ -600,7 +688,8 @@ class App {
   private loop(now: number): void {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    if ((this.screen === 'playing' || this.screen === 'paused' || (this.screen === 'settings' && this.settingsReturn === 'paused')) && this.session.cfg) {
+    const inRun = this.screen === 'playing' || this.screen === 'paused' || (this.screen === 'settings' && this.settingsReturn === 'paused');
+    if ((inRun || (this.screen === 'results' && this.session.celebrating)) && this.session.cfg) {
       this.session.update(dt);
       this.hudPush -= dt;
       if (this.remote.count && this.hudPush <= 0) {
@@ -617,6 +706,14 @@ class App {
     }
     requestAnimationFrame((t) => this.loop(t));
   }
+}
+
+interface NeonTestHook {
+  /** Plays this encoded input tape instead of live input the next time the road starts. */
+  autoplay?: { roadId: string; tape: string };
+  fireworkLoad?: () => number;
+  screen?: () => string;
+  lastShare?: { card: string; intent: string; opened: boolean };
 }
 
 new App();

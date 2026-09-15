@@ -31,6 +31,7 @@ export class Hud {
   private speedSegs: HTMLElement[] = [];
   private grav: HTMLElement;
   private assist: HTMLElement;
+  private ghostChip: HTMLElement;
   private msg: HTMLElement;
   private msgTitle: HTMLElement;
   private msgSub: HTMLElement;
@@ -79,6 +80,7 @@ export class Hud {
     const chips = el('div', 'hud-chips', bottom);
     this.grav = el('div', 'chip grav', chips);
     this.assist = el('div', 'chip assist', chips, 'ASSIST');
+    this.ghostChip = el('div', 'chip ghost-chip hidden', chips);
 
     this.msg = el('div', 'hud-msg hidden', this.root);
     this.msgTitle = el('div', 'hud-msg-title', this.msg);
@@ -111,6 +113,12 @@ export class Hud {
   }
 
   update(s: ShipState, ghost: ShipState | null, cfg: RunConfig, assistOn: boolean): void {
+    const hasGhost = !!cfg.ghost;
+    this.ghostChip.classList.toggle('hidden', !hasGhost);
+    if (hasGhost) {
+      this.set(this.ghostChip, ghost ? `GHOST ${cfg.ghostTime ? formatTime(cfg.ghostTime) : 'ON'}` : 'GHOST OFF · G');
+      this.ghostChip.classList.toggle('off', !ghost);
+    }
     const endless = cfg.mode === 'endless';
     const len = cfg.road.length * ROW_D;
     if (endless) {

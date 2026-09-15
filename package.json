@@ -33,7 +33,8 @@
     "solve:endless": "vite-node tools/solve-endless.ts",
     "e2e:phone": "PW_CHANNEL=chrome node tools/phone-e2e.mjs http://127.0.0.1:5287/",
     "shots": "node tools/world-shots.mjs",
-    "check:gpu": "node tools/gpu-check.mjs /tmp"
+    "check:gpu": "node tools/gpu-check.mjs /tmp",
+    "e2e:celebrate": "vite-node tools/solve-tape.ts w1r1 /tmp/neon-w1r1-tape.json && node tools/celebration-e2e.mjs http://127.0.0.1:5287/ /tmp/neon-w1r1-tape.json"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

@@ -60,6 +60,12 @@ if (shots) {
   await host.screenshot({ path: `${shots}/phone-driving-host.png` });
   await phone.screenshot({ path: `${shots}/phone-game.png` });
 }
+// The pad's ghost button toggles the (persisted) ghost setting on the game.
+const ghostSetting = () => host.evaluate(() => JSON.parse(localStorage.getItem('neon-roads-save-v1') ?? '{}').settings?.ghost ?? true);
+const before = await ghostSetting();
+await phone.dispatchEvent('[data-btn=ghost]', 'pointerdown');
+await host.waitForFunction((b) => (JSON.parse(localStorage.getItem('neon-roads-save-v1') ?? '{}').settings?.ghost ?? true) !== b, before, { timeout: 5000 });
+log(`phone ghost button toggled ghost: ${before} -> ${await ghostSetting()}`);
 const rtt = await phone.textContent('.bar-rtt');
 log('phone RTT readout:', rtt);
 await browser.close();

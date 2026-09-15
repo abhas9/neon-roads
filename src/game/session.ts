@@ -20,6 +20,12 @@ export interface RunConfig {
   title: string;
   subtitle: string;
   ghost: InputTape | null;
+  /** Jump assist setting the ghost was recorded with; replays must use the same option to stay in sync. */
+  ghostAssist: boolean;
+  /** Finish time of the ghost run, shown on its hologram label. */
+  ghostTime: number | null;
+  /** Scripted inputs instead of live input (automated tests, attract mode). */
+  inputTape?: InputTape | null;
   par: number | null;
   best: number | null;
   bestDistance: number | null;
@@ -32,6 +38,11 @@ export interface RunResult {
   distance: number;
   tape: InputTape;
   assist: boolean;
+  /** Remaining fuel and oxygen as 0..1 fractions of the road's allowance. */
+  fuel: number;
+  oxygen: number;
+  topSpeed: number;
+  jumps: number;
 }
 
 const INTRO_TIME = 1.1;
@@ -65,7 +76,11 @@ export class Session {
   private lowO2Beep = 0;
   attempts = 0;
   paused = false;
-  showGhost = true;
+  /** True while the finish scene keeps rendering behind the results screen. */
+  celebrating = false;
+  private assist = false;
+  private topSpeed = 0;
+  private jumps = 0;
   onEnd: ((r: RunResult) => void) | null = null;
   onAutoRestart: (() => void) | null = null;
   onEvents: ((events: number, ship: ShipState) => void) | null = null;
@@ -93,6 +108,11 @@ export class Session {
     this.prev.copyFrom(this.ship);
     this.ghost.reset(cfg.road);
     this.ghostPrev.copyFrom(this.ghost);
+    // Locked for the whole run so the recorded tape replays deterministically.
+    this.assist = this.settings().jumpAssist;
+    this.topSpeed = 0;
+    this.jumps = 0;
+    this.celebrating = false;
     this.tape = new InputTape();
     this.acc = 0;
     this.intro = 0;
@@ -115,7 +135,7 @@ export class Session {
     if (!cfg) return;
     const dt = Math.min(realDt, 0.1);
     const settings = this.settings();
-    this.input.poll(dt, this.raw);
+    if (!this.celebrating) this.input.poll(dt, this.raw);
 
     if (!this.paused) {
       if (this.intro < INTRO_TIME) {
@@ -131,14 +151,17 @@ export class Session {
           this.ghostPrev.copyFrom(this.ghost);
           const alive = this.ship.phase === 'alive';
           if (alive) {
-            quantize(this.raw, this.q);
+            if (cfg.inputTape) cfg.inputTape.read(this.ship.steps, this.q);
+            else quantize(this.raw, this.q);
             this.tape.push(this.q);
           }
-          stepShip(cfg.road, this.ship, this.q, { jumpAssist: settings.jumpAssist });
+          stepShip(cfg.road, this.ship, this.q, { jumpAssist: this.assist });
           this.events |= this.ship.events;
+          if (this.ship.phase === 'alive') this.topSpeed = Math.max(this.topSpeed, this.ship.vz);
+          if (this.ship.events & Ev.Jump) this.jumps++;
           if (cfg.ghost) {
             if (this.ghost.phase === 'alive') cfg.ghost.read(this.ghost.steps, this.gq);
-            stepShip(cfg.road, this.ghost, this.gq, { jumpAssist: false });
+            stepShip(cfg.road, this.ghost, this.gq, { jumpAssist: cfg.ghostAssist });
           }
         }
         if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
@@ -155,12 +178,12 @@ export class Session {
     }
 
     const alpha = this.intro < INTRO_TIME ? 1 : this.acc / DT;
-    const ghostOn = !!cfg.ghost && this.showGhost && settings.ghost;
+    const ghostOn = !!cfg.ghost && settings.ghost;
     this.view.frame({
       ship: s,
       prev: this.prev,
       alpha: this.paused ? 1 : alpha,
-      throttle: s.phase === 'alive' ? this.raw.throttle : 0,
+      throttle: s.phase === 'alive' ? (cfg.inputTape ? this.q.throttle : this.raw.throttle) : 0,
       ghost: ghostOn ? this.ghost : null,
       ghostPrev: ghostOn ? this.ghostPrev : null,
       events: this.events,
@@ -170,8 +193,8 @@ export class Session {
     this.events = 0;
 
     this.audio.updateEngine(s.vz / V_MAX, this.raw.throttle, s.phase === 'alive' && !this.paused);
-    this.audio.setMusicIntensity(this.paused ? 0.2 : 0.35 + (s.vz / V_MAX) * 0.65);
-    this.hud.update(s, ghostOn ? this.ghost : null, cfg, settings.jumpAssist);
+    this.audio.setMusicIntensity(this.paused ? 0.2 : 0.35 + (Math.min(s.vz, V_MAX) / V_MAX) * 0.65);
+    if (!this.celebrating) this.hud.update(s, ghostOn ? this.ghost : null, cfg, this.assist);
 
     if (s.phase === 'alive' && s.oxygen < 10 && !this.paused) {
       this.lowO2Beep -= dt;
@@ -217,13 +240,22 @@ export class Session {
       return;
     }
     this.ended = true;
+    if (s.phase === 'finished') {
+      // Keep the fireworks and fly-out rendering behind the results screen.
+      this.celebrating = true;
+      this.hud.hide();
+    }
     this.onEnd?.({
       finished: s.phase === 'finished',
       time: s.time,
       cause: s.cause,
       distance: Math.floor(s.z / ROW_D),
       tape: this.tape,
-      assist: this.settings().jumpAssist,
+      assist: this.assist,
+      fuel: s.maxFuel > 0 ? s.fuel / s.maxFuel : 0,
+      oxygen: s.maxOxygen > 0 ? s.oxygen / s.maxOxygen : 0,
+      topSpeed: this.topSpeed,
+      jumps: this.jumps,
     });
   }
 
@@ -235,6 +267,7 @@ export class Session {
   stop(): void {
     this.cfg = null;
     this.ended = true;
+    this.celebrating = false;
     this.audio.updateEngine(0, 0, false);
     this.hud.hide();
   }
