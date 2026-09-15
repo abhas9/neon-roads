@@ -16,7 +16,14 @@ const saveWith = (roads, settings = {}) =>
 
 /** Collects text boxes, hides all text to capture the true background, then scores each box. */
 async function audit(page, label) {
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(250);
+  // Measure the settled UI: let fade/scale-in animations finish (infinite ones like blinking are left running).
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().endTime !== Infinity).map((a) => a.finished.catch(() => undefined))),
+      new Promise((r) => setTimeout(r, 1500)),
+    ]),
+  );
   const items = await page.evaluate(() => {
     const out = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -156,6 +163,16 @@ const desktop = async (roads = progress, extraInit = null, settings = {}) => {
       await page.keyboard.press('Escape');
     }
   }
+  // Death message over the crash explosion: Scaffold opens with a half-block wall at row 24.
+  await page.goto(base);
+  await page.waitForTimeout(500);
+  await page.click('[data-action=campaign]');
+  await page.click('[data-action=road][data-world="5"][data-road="0"]');
+  await page.waitForSelector('.hud:not(.hidden)');
+  await page.keyboard.down('ArrowUp');
+  await page.waitForSelector('.hud-msg.bad', { timeout: 15000 });
+  await page.keyboard.up('ArrowUp');
+  await audit(page, 'Crash message over explosion (Orbital Yard)');
   // Endless results after driving off the road.
   await page.goto(base);
   await page.waitForTimeout(500);
