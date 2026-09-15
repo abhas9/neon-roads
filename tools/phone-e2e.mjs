@@ -37,7 +37,8 @@ log('phone A -> campaign OK');
 await phone.dispatchEvent('[data-btn=confirm]', 'pointerdown');
 await phone.waitForSelector('.mode-game', { timeout: 8000 });
 log('road started, phone switched to game layout');
-await host.waitForTimeout(1500);
+// Wait for the intro to finish and the run clock to tick, so network or load latency can't eat the throttle window.
+await host.waitForFunction(() => document.querySelector('.hud-timer')?.textContent !== '00:00.00', null, { timeout: 15000 });
 
 // Hold the stick up-right and press jump on the phone.
 const stick = await phone.$('.stick');
@@ -52,7 +53,7 @@ await phone.evaluate(({ cx, cy }) => {
   ev('pointerdown', cx, cy);
   ev('pointermove', cx + 10, cy - 70);
 }, { cx, cy });
-await host.waitForTimeout(1800);
+await host.waitForTimeout(2000);
 const speed = Number(await host.textContent('.speed-val span'));
 log('host speed after phone throttle:', speed);
 if (shots) {
@@ -62,7 +63,8 @@ if (shots) {
 const rtt = await phone.textContent('.bar-rtt');
 log('phone RTT readout:', rtt);
 await browser.close();
-if (!(speed > 50)) {
+// Full throttle for 2 s reaches ~180 on the HUD; require a clear, unambiguous acceleration.
+if (!(speed > 100)) {
   console.error('FAIL: ship did not accelerate from phone input');
   process.exit(1);
 }
