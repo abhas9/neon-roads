@@ -93,6 +93,7 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 - 🚀 **Boost overdrive:** boost pads push you past top speed, which makes boost-then-jump a skill of its own.
 - 📱 **Phone as controller:** scan a QR code and your phone becomes a wireless gamepad over peer-to-peer WebRTC.
 - 🎮 **Input:** keyboard (with analog steering ramp), gamepad (analog stick and triggers), and on-screen touch controls.
+- 👓 **Readable over any world:** every screen passes a WCAG AA contrast audit. Menu, HUD and label text sits on frosted backplates, so it stays legible over bright suns, moons and floors.
 - ♿ **Colour-independent tiles:** every special tile also has an animated pattern (plus sign, chevrons, dots, stripes, hazard bars), so you don't need to tell colours apart. Also optional jump assist and a reduced-motion setting.
 - 🌌 **Ten procedural skies:** synthwave suns, ringed planets, moons, a lensing black hole and more. Plus bloom, glowing edges, speed lines, shattering explosions and landing squash.
 - 🎵 **Generated soundtrack:** a different theme per world, plus synthesized effects and an engine hum that follows your speed. There are no audio files.
@@ -322,6 +323,7 @@ The roads live in [`src/levels/roads/`](src/levels/roads). After editing, run `n
 | `npm run check:gpu` | Renders several worlds in installed Chrome on the real GPU and fails on black-outs or invalid bloom output (dev server must be running) |
 | `npm run e2e:phone` | Pairs a phone page with the game over real WebRTC, navigates menus and drives the ship (dev server must be running) |
 | `npm run e2e:celebrate` | Finishes a road by replaying a solver run. Checks the fireworks, the results screen, the Share on X link and clipboard scorecard, the saved ghost, and that `G` toggles the hologram (dev server must be running) |
+| `npm run audit:contrast` | WCAG contrast audit of every visible text on 29 screens (menus, HUD over six worlds, results, mobile, phone controller). It measures each text box against what is actually rendered behind it, including the 3D scene, and fails below AA (4.5:1, or 3:1 for large text). Needs the dev server running |
 | `npm run shots -- <dir>` | Screenshots of every world and the mobile layout |
 
 The Playwright checks use an installed Google Chrome. Software-rendered headless browsers can miss GPU driver bugs, and some operating-system firewalls block peer-to-peer traffic for Playwright's bundled Chromium.
