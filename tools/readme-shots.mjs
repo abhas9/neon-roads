@@ -1,7 +1,10 @@
-// Captures README screenshots on the real GPU (installed Chrome). Usage: node tools/readme-shots.mjs <baseUrl>
+// Captures README screenshots on the real GPU (installed Chrome).
+// Usage: node tools/readme-shots.mjs <baseUrl> [w1r1-tape.json from tools/solve-tape.ts]
+import { readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5287/';
+const tapeInfo = process.argv[3] ? JSON.parse(readFileSync(process.argv[3], 'utf8')) : null;
 const out = 'docs/screenshots';
 const roads = {};
 const medals = [4, 3, 3, 2, 4, 3, 1, 2, 3, 0, 2, 3, 1, 0, 0];
@@ -75,6 +78,42 @@ async function drive(page, world, road, { seconds = 2.5, jumpAt = null, steer = 
   // Open Graph image (1200x630).
   await drive(page, 0, 0, { seconds: 2.3, jumpAt: 2.05 });
   await page.screenshot({ path: 'public/og-image.jpg', ...jpeg, clip: { x: 40, y: 45, width: 1200, height: 630 } });
+  await ctx.close();
+}
+
+// Victory fireworks, results with Share on X, and the holographic ghost (needs a winning tape).
+if (tapeInfo) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  await ctx.addInitScript((auto) => {
+    window.__neonTest = { autoplay: { roadId: auto.roadId, tape: auto.tape } };
+    localStorage.setItem('neon-roads-save-v1', JSON.stringify({ v: 1, roads: {}, settings: { music: 0, sfx: 0, jumpAssist: false, ghost: true, shake: true, bloom: true, quality: 'high', touchControls: 'off' }, endless: { best: 0 }, daily: {}, seenHelp: true }));
+  }, tapeInfo);
+  const page = await ctx.newPage();
+  await page.goto(base);
+  await page.waitForTimeout(700);
+  await page.click('[data-action=campaign]');
+  await page.click('[data-action=road][data-world="0"][data-road="0"]');
+  await page.waitForFunction(() => window.__neonTest.fireworkLoad() > 0, null, { timeout: 45000 });
+  await page.waitForTimeout(1400);
+  await page.screenshot({ path: `${out}/fireworks.jpg`, ...jpeg });
+  await page.waitForSelector('.results-screen');
+  await page.waitForTimeout(1600);
+  await page.focus('[data-action=share]');
+  await page.screenshot({ path: `${out}/results-share.jpg`, ...jpeg });
+  // Race the saved ghost: ease off the throttle so the hologram pulls ahead.
+  await page.keyboard.press('KeyR');
+  // Throttle is held through the intro so both ships launch together; a short lift lets the ghost edge ahead.
+  await page.keyboard.down('ArrowUp');
+  await page.waitForTimeout(1100 + 900);
+  await page.keyboard.up('ArrowUp');
+  await page.waitForTimeout(110);
+  await page.keyboard.down('ArrowUp');
+  await page.keyboard.down('ArrowLeft');
+  await page.waitForTimeout(170);
+  await page.keyboard.up('ArrowLeft');
+  await page.waitForTimeout(450);
+  await page.screenshot({ path: `${out}/ghost.jpg`, ...jpeg });
+  await page.keyboard.up('ArrowUp');
   await ctx.close();
 }
 
