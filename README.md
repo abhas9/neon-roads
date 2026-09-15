@@ -1,0 +1,276 @@
+<div align="center">
+
+# NEON ROADS
+
+**Ride the floating highways. Survive the void.**
+
+A neon-retro, floating-highway racer that runs in your browser.<br>
+It's a tribute to **SkyRoads**, the 1993 DOS classic by BlueMoon Software.
+
+[![Build and deploy](https://github.com/abhas9/neon-roads/actions/workflows/deploy.yml/badge.svg)](https://github.com/abhas9/neon-roads/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-ff2fb4.svg)](LICENSE)
+[![Made with three.js](https://img.shields.io/badge/three.js-r186-2ff3ff.svg)](https://threejs.org)
+
+### [▶ Play now at abhas9.github.io/neon-roads](https://abhas9.github.io/neon-roads/)
+
+<img src="docs/screenshots/gameplay.jpg" alt="Neon Roads gameplay: a hover ship racing along a glowing purple grid road toward a synthwave sun" width="100%">
+
+</div>
+
+---
+
+## Table of contents
+
+- [About](#about)
+- [A tribute to SkyRoads](#a-tribute-to-skyroads)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [How to play](#how-to-play)
+- [Use your phone as a controller](#use-your-phone-as-a-controller)
+- [Run locally](#run-locally)
+- [Deploy to GitHub Pages](#deploy-to-github-pages)
+- [Project structure](#project-structure)
+- [Authoring roads](#authoring-roads)
+- [Testing and verification](#testing-and-verification)
+- [Credits](#credits)
+- [License](#license)
+
+## About
+
+Neon Roads is an arcade platform-racer. You pilot a small hover ship along roads suspended in space: seven lanes of tiles, blocks, tunnels and gaps. Oxygen drains every second, fuel burns with every metre, and gravity changes from road to road. Reach the gate at the end before you run out of air.
+
+It is built with [three.js](https://threejs.org) and TypeScript and runs entirely in the browser: no install, no accounts, no server. Every level, model, texture and piece of music in this repository is original. The visuals are procedural shaders and the soundtrack is generated live with the Web Audio API.
+
+## A tribute to SkyRoads
+
+Neon Roads exists because of **[SkyRoads](https://en.wikipedia.org/wiki/SkyRoads_(video_game))** (1993), developed by **BlueMoon Software** in Estonia. SkyRoads was a remake of BlueMoon's earlier game **Kosmonaut** (1990). Released as shareware, it became an international hit in the DOS era and was followed by the *SkyRoads X-Mas Special* in 1994.
+
+What made it special, and what this project tries to honour:
+
+- **Instant clarity.** Steer, throttle and jump; the colour of a tile tells you what it does.
+- **Depth from combinations.** Gravity, oxygen, fuel, tile types and road geometry mix into roads that each feel like a different puzzle: some are sprints against the clock, some are precision tests, some are resource puzzles.
+- **The one-more-try loop.** Roads are short, failure is instant, and restarting is immediate.
+- **A real sense of speed** on the hardware of its day.
+
+Neon Roads keeps those ideas and adds modern touches: medals and ghost replays, procedurally generated endless and daily roads, a neon presentation, accessibility cues, and phone-as-controller support.
+
+> **Disclaimer.** Neon Roads is an independent, non-commercial fan tribute. It is not affiliated with, endorsed by or connected to BlueMoon Software, the SkyRoads rights holders or any publisher of the original game. "SkyRoads" and "Kosmonaut" are the property of their respective owners and are mentioned only to credit the inspiration. No code, graphics, audio or level data from the original games is used. All roads were designed from scratch, informed by public descriptions of the original's mechanics and by watching gameplay.
+
+If you have never played the original, it is well worth seeking out. Fan-made editors and remakes are still being created decades later.
+
+## Features
+
+### The classic formula
+
+- **The road:** a seven-lane grid of floor tiles, half and full-height blocks, tunnels, tunnels cut through blocks, and gaps to jump.
+- **Tile effects:**
+
+  | Tile | Effect |
+  |---|---|
+  | **Supply** (blue, plus sign) | Refills oxygen and fuel |
+  | **Boost** (green, chevrons) | Rapid acceleration |
+  | **Sticky** (olive, dots) | Heavy drag |
+  | **Slippery** (silver, stripes) | No steering |
+  | **Burning** (red, hazard stripes) | Instant destruction |
+
+- **Oxygen** is the clock, **fuel** burns with distance, and **gravity** ranges from floaty (G 100) to crushing (G 1700).
+- **Ways to die:** hitting a wall head-on at speed, falling into the void, or running out of air or fuel.
+- **Campaign:** 10 worlds × 3 roads = 30 handcrafted roads, each world introducing its own twist.
+- Unlimited retries with instant restart.
+
+### What's new
+
+- 🏅 **Medals:** Bronze, Silver, Gold and the elusive **Neon**, measured against par times.
+- 👻 **Ghost replays:** race your personal best. The simulation runs at a deterministic 120 Hz, so a ghost is just your recorded inputs.
+- ♾️ **Endless mode:** a procedurally generated road that gets harder the further you go, with gravity sectors that shift under you.
+- 📅 **Daily Run:** the same generated road for everyone on a given day, with a ghost of your best attempt.
+- 🚀 **Boost overdrive:** boost pads push you past top speed, which makes boost-then-jump a skill of its own.
+- 📱 **Phone as controller:** scan a QR code and your phone becomes a wireless gamepad over peer-to-peer WebRTC.
+- 🎮 **Input:** keyboard (with analog steering ramp), gamepad (analog stick and triggers), and on-screen touch controls.
+- ♿ **Colour-independent tiles:** every special tile also has an animated pattern (plus sign, chevrons, dots, stripes, hazard bars), so you don't need to tell colours apart. Also optional jump assist and a reduced-motion setting.
+- 🌌 **Ten procedural skies:** synthwave suns, ringed planets, moons, a lensing black hole and more. Plus bloom, glowing edges, speed lines, shattering explosions and landing squash.
+- 🎵 **Generated soundtrack:** a different theme per world, plus synthesized effects and an engine hum that follows your speed. There are no audio files.
+- ✅ **Every road is proven beatable:** a beam-search bot plays all 30 roads without jump assist before release, and its times set the medal targets.
+
+## Screenshots
+
+| | |
+|:---:|:---:|
+| <img src="docs/screenshots/title.jpg" alt="Title screen"> | <img src="docs/screenshots/campaign.jpg" alt="Campaign world select with medals"> |
+| **Title screen** | **Campaign: 10 worlds, 30 roads, medals** |
+| <img src="docs/screenshots/solar-forge.jpg" alt="Solar Forge world with burning tiles"> | <img src="docs/screenshots/ion-drift.jpg" alt="Ion Drift world with neon rings and a ringed planet"> |
+| **Solar Forge: the floor is literally lava** | **Ion Drift: ice, boost and no brakes** |
+| <img src="docs/screenshots/glass-moon.jpg" alt="Glass Moon low gravity world"> | <img src="docs/screenshots/event-horizon.jpg" alt="Event Horizon world with a black hole"> |
+| **Glass Moon: low gravity, long falls** | **Event Horizon: gravity stops making sense** |
+| <img src="docs/screenshots/phone-pairing.jpg" alt="Phone controller pairing screen with QR code"> | <img src="docs/screenshots/phone-pad.jpg" alt="Phone controller pad with steering stick and jump button"> |
+| **Pair a phone with a QR code** | **The phone becomes the gamepad** |
+
+<p align="center">
+  <img src="docs/screenshots/neon-core.jpg" alt="Neon Core final world" width="62%">
+  <img src="docs/screenshots/mobile.jpg" alt="Mobile portrait layout with touch controls" width="17%">
+</p>
+
+## How to play
+
+Reach the glowing gate at the end of each road before your oxygen or fuel runs out.
+
+| Action | Keyboard | Gamepad | Touch / phone |
+|---|---|---|---|
+| Steer | `←` `→` or `A` `D` | Left stick / D-pad | Drag the pad left or right (or tilt) |
+| Accelerate / brake | `↑` `↓` or `W` `S` | RT / LT | Drag the pad up or down (or cruise) |
+| Jump | `Space` | A | **JUMP** |
+| Restart | `R` | Y / Back | ⟲ |
+| Pause | `Esc` / `P` | Start | ❚❚ |
+| Toggle ghost | `G` | X | — |
+
+**Tips**
+
+- Brushing a wall slowly only bumps you. Hitting one head-on at speed does not.
+- Jump height depends on gravity (the **G** readout). At G 1700 you can barely hop.
+- Boost pads let you carry extra speed into a jump. Some gaps need it.
+- Sticky tar is survivable: keep the throttle down and you will crawl out.
+- Turn on **Jump assist** in Settings while learning a road.
+
+**Unlocking:** finish a road to unlock the next one in its world. Finish any two roads in a world to open the next world.
+
+## Use your phone as a controller
+
+Works on the hosted site and locally.
+
+1. Open the game on a computer and choose **Phone Controller** on the title screen.
+2. Scan the QR code with your phone's camera, or open [`abhas9.github.io/neon-roads/controller.html`](https://abhas9.github.io/neon-roads/controller.html) on the phone and enter the five-letter code.
+3. Hold the phone sideways:
+   - **Left thumb:** drag to steer; up and down is throttle.
+   - **Right thumb:** jump.
+   - **In menus:** the phone becomes a D-pad with A/B buttons.
+
+**Options on the pad (⚙):** tilt-to-steer, cruise (auto-accelerate), vibration and steering sensitivity. The phone also shows your oxygen, fuel and speed, and it vibrates on jumps, boosts and crashes.
+
+### How it works
+
+- **No game server:** the two browsers talk directly using WebRTC data channels via [PeerJS](https://peerjs.com).
+  - The free public PeerJS broker is used only for the initial handshake.
+  - After that, every input goes straight from your phone to the game.
+  - On the same Wi-Fi, that is a local connection with a few milliseconds of latency.
+  - On different networks, it still connects through STUN, or a public relay if it has to.
+- **Low latency:**
+  - Steering and throttle are sent as tiny 6-byte binary frames on an unordered channel, on every change plus a 30 Hz heartbeat.
+  - Buttons, menu navigation, haptics and the mini HUD use a separate reliable channel.
+- **Safe if the phone drops:** if a phone disconnects, its inputs are zeroed after 400 ms and the pad reconnects automatically.
+
+### Troubleshooting
+
+- **"No game found for code…"**: keep the pairing screen open on the computer, or press *New code* and scan again.
+- **Tilt steering is unavailable on iPhone:** iOS only allows motion sensors on HTTPS pages. It works on the hosted site; on a local HTTP dev server, use touch steering.
+- **Local dev server:** run `npm run dev` and make sure the phone is on the same Wi-Fi. The QR code automatically points at your computer's LAN address.
+- **Use your own broker:** to avoid the public PeerJS broker, run a [PeerServer](https://github.com/peers/peerjs-server) and build with `VITE_PEER_HOST`, `VITE_PEER_PORT`, `VITE_PEER_PATH` and `VITE_PEER_SECURE`. In GitHub Actions you can set these as repository variables.
+- **Verbose connection logs:** add `?peerdebug` to either page's URL.
+
+## Run locally
+
+Requires Node.js 20.19+ or 22.12+.
+
+```bash
+git clone git@github.com:abhas9/neon-roads.git
+cd neon-roads
+npm install
+npm run dev       # http://localhost:5287, also reachable from your LAN for the phone controller
+```
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Development server with hot reload |
+| `npm test` | Unit tests: physics, road format, replay determinism, solver |
+| `npm run build` | Type-check and build the static site into `dist/` |
+| `npm run preview` | Serve the production build locally |
+
+## Deploy to GitHub Pages
+
+This repository deploys itself. [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) installs dependencies, runs the tests, builds, and publishes `dist/` to GitHub Pages on every push to `main`. Pull requests run the tests and build without deploying.
+
+To deploy your own fork:
+
+1. Fork the repository.
+2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
+3. Push to `main`, or run the workflow manually from the **Actions** tab.
+
+The build uses relative asset paths, so it works under any sub-path such as `https://<user>.github.io/<repo>/` with no configuration. The phone controller page is published next to the game at `controller.html`.
+
+## Project structure
+
+```
+src/
+  sim/          Deterministic physics (no three.js): grid collision, ship, replay tapes, beam-search solver
+  levels/       Road text format, 10 worlds / 30 roads, par times, endless and daily generator
+  render/       Road chunk meshes with a neon shader, sky shader, ship model, particles, camera, post-processing
+  game/         Run session (fixed-step loop, ghosts, death/finish flow) and medals
+  ui/           HUD, menu screens, on-screen touch controls
+  net/          Phone-controller wire protocol and WebRTC host
+  controller/   The phone controller page
+  audio/        Synthesized sound effects and the procedural music sequencer
+tests/          Vitest unit tests
+tools/          Solver scripts and Playwright checks (screenshots, real-GPU render check, phone end-to-end)
+docs/           Design research and plan, screenshots
+```
+
+## Authoring roads
+
+Roads are plain text, one row per line, starting from the beginning of the road:
+
+```text
+=======*30     30 rows of full-width floor
+..===..*10     narrow to three lanes
+.......*4      a four-row gap
+HHHTHHH*14     a wall of full blocks with a tunnel through the middle
+{
+x=x=x=x
+=======
+}*6            repeat a group of rows
+```
+
+| Symbol | Cell | Symbol | Cell |
+|---|---|---|---|
+| `.` | gap | `h` / `H` | half / full block |
+| `=` `-` `:` | floor (three shades) | `g` / `G` | half / full block, alternate colour |
+| `s` | supply | `t` | tunnel |
+| `b` | boost | `T` | tunnel through a full block |
+| `k` | sticky | `X` / `S` / `B` | half block with burning / supply / boost top |
+| `i` | slippery | `x` | burning |
+
+The roads live in [`src/levels/roads/`](src/levels/roads). After editing, run `npm run solve`. It proves every road can be finished without jump assist and writes the par times used for medals to `src/levels/pars.json`. Pass a prefix to check only some roads, e.g. `npm run solve -- w3`.
+
+## Testing and verification
+
+| Command | Checks |
+|---|---|
+| `npm test` | Physics, collisions, tiles, gravity, boost, replay encoding determinism, solver |
+| `npm run solve` | All 30 roads are beatable; updates par times |
+| `npm run solve:endless` | Windows of generated endless roads at several difficulty depths are beatable |
+| `npm run check:gpu` | Renders several worlds in installed Chrome on the real GPU and fails on black-outs or invalid bloom output (dev server must be running) |
+| `npm run e2e:phone` | Pairs a phone page with the game over real WebRTC, navigates menus and drives the ship (dev server must be running) |
+| `npm run shots -- <dir>` | Screenshots of every world and the mobile layout |
+
+The Playwright checks use an installed Google Chrome. Software-rendered headless browsers can miss GPU driver bugs, and some operating-system firewalls block peer-to-peer traffic for Playwright's bundled Chromium.
+
+## Credits
+
+**Inspiration**
+
+- *SkyRoads* (1993) and *Kosmonaut* (1990) by **BlueMoon Software**. Thank you for the game that started it all.
+- Research into the original's mechanics drew on the [SkyRoads Wikipedia article](https://en.wikipedia.org/wiki/SkyRoads_(video_game)), [MobyGames](https://www.mobygames.com/game/1007/skyroads/), the [ModdingWiki level format notes](https://moddingwiki.shikadi.net/wiki/SkyRoads_level_format), retro reviews, and a full playthrough recording by AndokaiCamanis.
+
+**Open-source software and assets**
+
+| Project | Used for | License |
+|---|---|---|
+| [three.js](https://threejs.org) | 3D rendering and post-processing | MIT |
+| [PeerJS](https://peerjs.com) | WebRTC connections for the phone controller | MIT |
+| [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) | Pairing QR codes | MIT |
+| [Orbitron](https://fonts.google.com/specimen/Orbitron) and [Rajdhani](https://fonts.google.com/specimen/Rajdhani) via Google Fonts | Typography | SIL Open Font License 1.1 |
+| [Vite](https://vite.dev), [Vitest](https://vitest.dev), [TypeScript](https://www.typescriptlang.org), [Playwright](https://playwright.dev) | Build, tests and verification tooling | MIT / Apache-2.0 |
+
+## License
+
+Neon Roads is released under the [MIT License](LICENSE). Copyright (c) 2026 Abhas Tandon.
+
+The MIT license covers the code and original content in this repository. It does not cover the SkyRoads or Kosmonaut names or games, which belong to their respective owners.
