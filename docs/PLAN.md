@@ -275,4 +275,8 @@ All milestones in scope are implemented:
 - [x] Phone controller over PeerJS/WebRTC. Tested end to end with Playwright on real Chrome.
 - [x] Procedural music per world and synthesized SFX.
 
+- [x] Holographic ghost ship: hologram shader, wireframe edges, best-time label, proximity fade, assist-synced replays, toggle via G, pause, settings and phone.
+- [x] Victory celebration: fireworks and an orbiting camera at the finish gate, continuing behind the results screen.
+- [x] Share on X: ASCII scorecard copied to the clipboard plus a pre-filled post with time, medal, fuel, O₂ and the game URL.
+
 Deferred ideas: new tile mechanics (jump pads, crumbling, moving blocks, gravity flip, warp), level editor with share links, key remapping UI.

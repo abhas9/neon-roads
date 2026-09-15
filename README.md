@@ -26,6 +26,8 @@ It's a tribute to **SkyRoads**, the 1993 DOS classic by BlueMoon Software.
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [How to play](#how-to-play)
+- [Holographic ghost ship](#holographic-ghost-ship)
+- [Victory celebration and Share on X](#victory-celebration-and-share-on-x)
 - [Use your phone as a controller](#use-your-phone-as-a-controller)
 - [Run locally](#run-locally)
 - [Deploy to GitHub Pages](#deploy-to-github-pages)
@@ -81,7 +83,11 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 ### What's new
 
 - 🏅 **Medals:** Bronze, Silver, Gold and the elusive **Neon**, measured against par times.
-- 👻 **Ghost replays:** race your personal best. The simulation runs at a deterministic 120 Hz, so a ghost is just your recorded inputs.
+- 👻 **Holographic ghost ship:** your fastest run on every road is recorded automatically and replayed as a glowing hologram you can race.
+  - **Toggle:** `G`, the pause menu, Settings, or 👻 on the phone pad.
+  - **Details:** see [Holographic ghost ship](#holographic-ghost-ship).
+- 🎆 **Victory celebration:** clearing a road sets off fireworks at the finish gate while the camera circles it. The show keeps going behind the results screen, and a medal adds a finale salvo.
+- 𝕏 **Share on X:** one click copies an ASCII scorecard to your clipboard and opens a ready-made post with your time, medal, fuel, oxygen, top speed and a link to the game.
 - ♾️ **Endless mode:** a procedurally generated road that gets harder the further you go, with gravity sectors that shift under you.
 - 📅 **Daily Run:** the same generated road for everyone on a given day, with a ghost of your best attempt.
 - 🚀 **Boost overdrive:** boost pads push you past top speed, which makes boost-then-jump a skill of its own.
@@ -96,8 +102,12 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 
 | | |
 |:---:|:---:|
-| <img src="docs/screenshots/title.jpg" alt="Title screen"> | <img src="docs/screenshots/campaign.jpg" alt="Campaign world select with medals"> |
-| **Title screen** | **Campaign: 10 worlds, 30 roads, medals** |
+| <img src="docs/screenshots/ghost.jpg" alt="Holographic ghost ship with a best-time label racing ahead of the player"> | <img src="docs/screenshots/fireworks.jpg" alt="Fireworks exploding over the finish gate after clearing a road"> |
+| **Race your holographic ghost** | **Victory fireworks at the finish gate** |
+| <img src="docs/screenshots/results-share.jpg" alt="Results screen with Neon medal, fuel and oxygen meters and a Share on X button"> | <img src="docs/screenshots/campaign.jpg" alt="Campaign world select with medals"> |
+| **Results, stats and Share on X** | **Campaign: 10 worlds, 30 roads, medals** |
+| <img src="docs/screenshots/title.jpg" alt="Title screen"> | <img src="docs/screenshots/neon-core.jpg" alt="Neon Core final world"> |
+| **Title screen** | **Neon Core: everything, all at once** |
 | <img src="docs/screenshots/solar-forge.jpg" alt="Solar Forge world with burning tiles"> | <img src="docs/screenshots/ion-drift.jpg" alt="Ion Drift world with neon rings and a ringed planet"> |
 | **Solar Forge: the floor is literally lava** | **Ion Drift: ice, boost and no brakes** |
 | <img src="docs/screenshots/glass-moon.jpg" alt="Glass Moon low gravity world"> | <img src="docs/screenshots/event-horizon.jpg" alt="Event Horizon world with a black hole"> |
@@ -106,8 +116,7 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 | **Pair a phone with a QR code** | **The phone becomes the gamepad** |
 
 <p align="center">
-  <img src="docs/screenshots/neon-core.jpg" alt="Neon Core final world" width="62%">
-  <img src="docs/screenshots/mobile.jpg" alt="Mobile portrait layout with touch controls" width="17%">
+  <img src="docs/screenshots/mobile.jpg" alt="Mobile portrait layout with touch controls" width="22%">
 </p>
 
 ## How to play
@@ -121,7 +130,7 @@ Reach the glowing gate at the end of each road before your oxygen or fuel runs o
 | Jump | `Space` | A | **JUMP** |
 | Restart | `R` | Y / Back | ⟲ |
 | Pause | `Esc` / `P` | Start | ❚❚ |
-| Toggle ghost | `G` | X | — |
+| Toggle holographic ghost | `G` | X | 👻 |
 
 **Tips**
 
@@ -132,6 +141,70 @@ Reach the glowing gate at the end of each road before your oxygen or fuel runs o
 - Turn on **Jump assist** in Settings while learning a road.
 
 **Unlocking:** finish a road to unlock the next one in its world. Finish any two roads in a world to open the next world.
+
+## Holographic ghost ship
+
+Every road remembers your fastest run.
+
+**Recording**
+- The first time you clear a road, and every time you beat your best time, the game saves that run.
+- It's stored as a compact input recording in your browser's local storage. No account or server is involved.
+- Daily Runs keep a ghost of your furthest run for that day.
+
+**The race**
+- The next time you play the road, a cyan hologram of that run launches alongside you.
+- It has scanlines, a glowing rim, flicker, occasional glitch jitter and wireframe edges.
+- A floating label shows the time you're chasing.
+
+**Reading it**
+- The HUD shows your gap to the ghost in seconds (green when you're ahead, red when behind).
+- The progress bar marks where the ghost is.
+- The hologram fades when it overlaps your ship, so it never hides the road in front of you.
+
+**Why it's exact.** The simulation is fully deterministic at 120 Hz, so the ghost replays your inputs frame-perfectly. The jump-assist setting you used is saved with the run, so assisted runs replay exactly too.
+
+**Toggling.** Press `G` during a run, use the pause menu or Settings, or tap 👻 on the phone controller. The choice is remembered.
+
+## Victory celebration and Share on X
+
+**Fireworks.** Clear any campaign road and fireworks go up over the finish gate as the camera circles it. Rockets burst into peony, ring, willow and crackle patterns in the world's colours. A medal adds a finale salvo. The fireworks keep going behind the results screen, which shows your medal, time, remaining fuel and oxygen, top speed and jumps.
+
+**Sharing.** Press **Share on X** on the results screen. This also works for Endless and Daily results.
+
+1. **Copies an ASCII scorecard** to your clipboard, ready to paste anywhere:
+
+   ```text
+   +--------------------------------------+
+   |  N E O N   R O A D S                 |
+   |  ROAD  1-1  FIRST LIGHT              |
+   |  WORLD LAUNCH RING                   |
+   +--------------------------------------+
+   |  TIME       00:20.38   NEON          |
+   |  PAR        00:20.38   +0.00s        |
+   |  FUEL       [###############-]  94%  |
+   |  OXYGEN     [###############-]  96%  |
+   |  TOP SPEED  210                      |
+   |  JUMPS      7                        |
+   |  ATTEMPTS   1                        |
+   +--------------------------------------+
+     Race me: https://abhas9.github.io/neon-roads/
+   ```
+
+2. **Opens a pre-filled post on X** with your road, time, medal, fuel and O₂ meters, top speed and a link to the game:
+
+   ```text
+   🏁 Cleared 1-1 "First Light" in NEON ROADS
+
+   ⏱ 00:20.38 · 💎 NEON
+   ⛽ Fuel ▰▰▰▰▰▰▰▰▰▱ 94%
+   💨 O₂   ▰▰▰▰▰▰▰▰▰▰ 96%
+   🚀 Top speed 210 · 7 jumps
+
+   Can you beat my time?
+   https://abhas9.github.io/neon-roads/
+   ```
+
+The post is kept within X's 280-character limit. When you play on a local dev server, the shared link points to the public site. On a fork deployed to GitHub Pages, it points to that fork.
 
 ## Use your phone as a controller
 
@@ -144,7 +217,7 @@ Works on the hosted site and locally.
    - **Right thumb:** jump.
    - **In menus:** the phone becomes a D-pad with A/B buttons.
 
-**Options on the pad (⚙):** tilt-to-steer, cruise (auto-accelerate), vibration and steering sensitivity. The phone also shows your oxygen, fuel and speed, and it vibrates on jumps, boosts and crashes.
+**On the pad:** tap 👻 to toggle the ghost. The ⚙ menu has tilt-to-steer, cruise (auto-accelerate), vibration and steering sensitivity. The phone also shows your oxygen, fuel and speed, and it vibrates on jumps, boosts and crashes.
 
 ### How it works
 
@@ -202,8 +275,8 @@ The build uses relative asset paths, so it works under any sub-path such as `htt
 src/
   sim/          Deterministic physics (no three.js): grid collision, ship, replay tapes, beam-search solver
   levels/       Road text format, 10 worlds / 30 roads, par times, endless and daily generator
-  render/       Road chunk meshes with a neon shader, sky shader, ship model, particles, camera, post-processing
-  game/         Run session (fixed-step loop, ghosts, death/finish flow) and medals
+  render/       Road chunk meshes with a neon shader, sky shader, ship model, hologram ghost, fireworks, particles, camera, post-processing
+  game/         Run session (fixed-step loop, ghosts, death/finish flow), medals, scorecard and X post builder
   ui/           HUD, menu screens, on-screen touch controls
   net/          Phone-controller wire protocol and WebRTC host
   controller/   The phone controller page
@@ -248,6 +321,7 @@ The roads live in [`src/levels/roads/`](src/levels/roads). After editing, run `n
 | `npm run solve:endless` | Windows of generated endless roads at several difficulty depths are beatable |
 | `npm run check:gpu` | Renders several worlds in installed Chrome on the real GPU and fails on black-outs or invalid bloom output (dev server must be running) |
 | `npm run e2e:phone` | Pairs a phone page with the game over real WebRTC, navigates menus and drives the ship (dev server must be running) |
+| `npm run e2e:celebrate` | Finishes a road by replaying a solver run. Checks the fireworks, the results screen, the Share on X link and clipboard scorecard, the saved ghost, and that `G` toggles the hologram (dev server must be running) |
 | `npm run shots -- <dir>` | Screenshots of every world and the mobile layout |
 
 The Playwright checks use an installed Google Chrome. Software-rendered headless browsers can miss GPU driver bugs, and some operating-system firewalls block peer-to-peer traffic for Playwright's bundled Chromium.
