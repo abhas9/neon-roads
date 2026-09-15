@@ -1,0 +1,28 @@
+import { chromium } from 'playwright';
+
+const out = process.argv[2] ?? 'shots';
+const url = process.argv[3] ?? 'http://127.0.0.1:5287/';
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const logs = [];
+page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
+page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+await page.goto(url);
+await page.waitForTimeout(2500);
+await page.screenshot({ path: `${out}/1-title.png` });
+await page.click('[data-action=campaign]');
+await page.waitForTimeout(1200);
+await page.screenshot({ path: `${out}/2-worlds.png` });
+await page.click('[data-action=road][data-world="0"][data-road="0"]');
+await page.waitForTimeout(1600);
+await page.keyboard.down('ArrowUp');
+await page.waitForTimeout(2500);
+await page.screenshot({ path: `${out}/3-play.png` });
+await page.keyboard.press('Space');
+await page.waitForTimeout(250);
+await page.screenshot({ path: `${out}/4-jump.png` });
+await page.waitForTimeout(3000);
+await page.screenshot({ path: `${out}/5-later.png` });
+await page.keyboard.up('ArrowUp');
+console.log(logs.join('\n'));
+await browser.close();

@@ -1,0 +1,52 @@
+{
+  "name": "neon-roads",
+  "private": true,
+  "version": "1.0.0",
+  "description": "A neon-retro floating-highway racer for the browser, inspired by the 1993 DOS classic SkyRoads.",
+  "license": "MIT",
+  "author": "Abhas Tandon",
+  "homepage": "https://abhas9.github.io/neon-roads/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abhas9/neon-roads.git"
+  },
+  "bugs": {
+    "url": "https://github.com/abhas9/neon-roads/issues"
+  },
+  "keywords": [
+    "game",
+    "threejs",
+    "webgl",
+    "skyroads",
+    "racing",
+    "webrtc",
+    "peerjs"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "solve": "vite-node tools/solve.ts",
+    "solve:endless": "vite-node tools/solve-endless.ts",
+    "e2e:phone": "PW_CHANNEL=chrome node tools/phone-e2e.mjs http://127.0.0.1:5287/",
+    "shots": "node tools/world-shots.mjs",
+    "check:gpu": "node tools/gpu-check.mjs /tmp"
+  },
+  "dependencies": {
+    "peerjs": "^1.5.5",
+    "qrcode-generator": "^2.0.4",
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "@types/three": "^0.186.0",
+    "playwright": "^1.62.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vite-node": "^6.0.0",
+    "vitest": "^5.0.0"
+  }
+}
