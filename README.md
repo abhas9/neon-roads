@@ -264,7 +264,7 @@ Print a two-colour marker, tape it to a pen, and fly the ship by waving it at yo
 
 ### Getting started
 
-1. Open **Wand Controller** on the title screen and hit **Print the marker** (or open [`marker.html`](marker.html) directly). Print at 100% scale.
+1. Open **Wand Controller** on the title screen and hit **Print the marker** (or open [the marker sheet](https://abhas9.github.io/neon-roads/marker.html) directly). Print at 100% scale.
 2. Cut out the strip and tape it along a pen, a chopstick, a wooden spoon — anything straight you can hold in the middle.
 3. Back in the game, press **Enable camera** and allow access.
 4. Hold the wand level inside the dashed box and press **Calibrate**. Sampling takes about half a second.

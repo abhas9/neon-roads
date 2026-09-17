@@ -144,8 +144,9 @@ class App {
     return this.wand.model ? 'calibrated · tap to start' : 'steer with a printed marker';
   }
 
+  /** "Play with the wand" goes on to pick a road; Back returns to the title. */
   private leaveWand(): void {
-    this.show(this.current ? 'worlds' : 'title');
+    this.show('worlds');
   }
 
   private phoneLabel(): string {

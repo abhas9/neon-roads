@@ -32,7 +32,7 @@ const RIDGE = 36;
 const MAX_VAR = 225;
 const MAX_D = 16;
 
-export type CalibrationError = 'no-marker-left' | 'no-marker-right' | 'too-similar';
+export type CalibrationError = 'no-marker-left' | 'no-marker-right' | 'too-similar' | 'cancelled';
 
 export interface CalibrationResult {
   model: WandModel;
@@ -181,4 +181,5 @@ export const CALIBRATION_HELP: Record<CalibrationError, string> = {
   'no-marker-left': 'Could not see the first disc. Try more light, or hold the wand closer.',
   'no-marker-right': 'Could not see the second disc. Keep the whole wand inside the box.',
   'too-similar': 'Both ends look like the same colour. Use two clearly different colours.',
+  cancelled: 'Calibration stopped.',
 };

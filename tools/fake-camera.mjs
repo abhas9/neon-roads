@@ -49,11 +49,18 @@ export function fakeCamera() {
     disc(cx + dx, cy + dy, 22, '#ff00a8');
     disc(cx - dx, cy - dy, 22, '#00e5ff');
   };
-  const stream = canvas.captureStream(0);
-  const track = stream.getVideoTracks()[0];
+  // A real getUserMedia always hands back a live stream, so a fresh one is minted per call;
+  // reusing a stream whose tracks were stopped would make "turn off, turn on again" untestable.
+  let tracks = [];
+  const mint = () => {
+    const s = canvas.captureStream(0);
+    tracks.push(s.getVideoTracks()[0]);
+    return s;
+  };
   setInterval(() => {
     draw();
-    track.requestFrame();
+    tracks = tracks.filter((t) => t.readyState === 'live');
+    for (const t of tracks) t.requestFrame();
   }, 16);
   window.__wand = {
     set: (next) => Object.assign(pose, next),
@@ -65,5 +72,13 @@ export function fakeCamera() {
     },
   };
   navigator.mediaDevices = navigator.mediaDevices ?? {};
-  navigator.mediaDevices.getUserMedia = async () => stream;
+  // Counted so tests can prove a second camera is never opened.
+  window.__gumCalls = 0;
+  navigator.mediaDevices.getUserMedia = async () => {
+    window.__gumCalls++;
+    // A real permission prompt does not resolve instantly; the delay is what exposes a missing
+    // re-entrancy guard on the enable button.
+    await new Promise((r) => setTimeout(r, 120));
+    return mint();
+  };
 }

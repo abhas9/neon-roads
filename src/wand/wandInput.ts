@@ -16,6 +16,9 @@ export type WandState = 'off' | 'starting' | 'denied' | 'error' | 'ready';
 /** Working resolution. 160x120 is 19k pixels: under a millisecond, and plenty for a 7px disc. */
 const PROC_H = 120;
 const MAX_PROC_W = 240;
+/** Frames averaged for the tracking-lock and frame-rate readouts. */
+const LOCK_WINDOW = 120;
+const FPS_WINDOW = 30;
 /** Frames sampled during calibration, about half a second of holding still. */
 export const CALIBRATION_FRAMES = 30;
 
@@ -59,10 +62,19 @@ export class WandInput {
   private frame: ImageData | null = null;
   private gates: { a: Gate | null; b: Gate | null } = { a: null, b: null };
   private raf = 0;
+  private vfc = 0;
   private stopped = true;
+  private starting: Promise<boolean> | null = null;
   private last = 0;
-  private lockHist: number[] = [];
-  private fpsHist: number[] = [];
+  // Ring buffers with running sums: the readouts must not cost more than the tracking does.
+  private lockHist = new Float32Array(LOCK_WINDOW);
+  private lockAt = 0;
+  private lockN = 0;
+  private lockSum = 0;
+  private fpsHist = new Float32Array(FPS_WINDOW);
+  private fpsAt = 0;
+  private fpsN = 0;
+  private fpsSum = 0;
 
   private sampler = new CalibrationSampler();
   private calibrating = false;
@@ -86,6 +98,17 @@ export class WandInput {
 
   async start(): Promise<boolean> {
     if (this.state === 'ready') return true;
+    // Double-clicking "Enable camera" would otherwise open a second stream and a second loop.
+    if (this.starting) return this.starting;
+    this.starting = this.open();
+    try {
+      return await this.starting;
+    } finally {
+      this.starting = null;
+    }
+  }
+
+  private async open(): Promise<boolean> {
     this.state = 'starting';
     this.error = '';
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -132,7 +155,9 @@ export class WandInput {
   private lockCameraSettings(): void {
     const track = this.stream?.getVideoTracks()[0];
     if (!track?.applyConstraints) return;
-    const advanced = [{ exposureMode: 'manual' }, { whiteBalanceMode: 'manual' }, { focusMode: 'continuous' }];
+    // White balance is the setting that actually moves calibrated colours; exposure is left on
+    // auto deliberately, since locking it in a dim room can pin the image too dark to track.
+    const advanced = [{ whiteBalanceMode: 'manual' }, { focusMode: 'continuous' }];
     void track.applyConstraints({ advanced } as MediaTrackConstraints).catch(() => {
       // Unsupported on this camera; auto modes stay on and calibration absorbs the difference.
     });
@@ -142,6 +167,11 @@ export class WandInput {
     this.stopped = true;
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
+    const v = this.video as HTMLVideoElement & { cancelVideoFrameCallback?: (h: number) => void };
+    if (this.vfc && v.cancelVideoFrameCallback) v.cancelVideoFrameCallback(this.vfc);
+    this.vfc = 0;
+    // Anything awaiting calibration must be released, or the setup screen sticks on "Hold still".
+    this.cancelCalibration();
     for (const t of this.stream?.getTracks() ?? []) t.stop();
     this.stream = null;
     this.video.srcObject = null;
@@ -157,7 +187,8 @@ export class WandInput {
       requestVideoFrameCallback?: (cb: (now: number, meta: Record<string, number>) => void) => number;
     };
     if (v.requestVideoFrameCallback) {
-      v.requestVideoFrameCallback((now, meta) => {
+      this.vfc = v.requestVideoFrameCallback((now, meta) => {
+        this.vfc = 0;
         // presentationTime shares the performance.now() timeline, so the gap is a fair estimate
         // of how stale the pixels already are before we even look at them.
         const captured = meta.captureTime ?? meta.presentationTime ?? 0;
@@ -176,10 +207,17 @@ export class WandInput {
     const vw = this.video.videoWidth;
     const vh = this.video.videoHeight;
     if (!vw || !vh) return false;
-    const w = Math.min(MAX_PROC_W, Math.max(80, Math.round((PROC_H * vw) / vh)));
-    if (this.canvas.width !== w || this.canvas.height !== PROC_H) {
+    // Aspect must be preserved, not clamped: blob coordinates are normalised by height, so a
+    // squashed frame would quietly skew every tilt angle the tracker reports.
+    let h = PROC_H;
+    let w = Math.max(80, Math.round((h * vw) / vh));
+    if (w > MAX_PROC_W) {
+      w = MAX_PROC_W;
+      h = Math.max(60, Math.round((w * vh) / vw));
+    }
+    if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
-      this.canvas.height = PROC_H;
+      this.canvas.height = h;
       this.ctx = null;
     }
     if (!this.ctx) {
@@ -191,6 +229,7 @@ export class WandInput {
   }
 
   private tick(latency: number): void {
+    if (this.stopped) return;
     const t0 = performance.now();
     const dt = Math.min(0.1, Math.max(1e-4, (t0 - this.last) / 1000));
     this.last = t0;
@@ -221,14 +260,18 @@ export class WandInput {
       const wasJumping = this.mapper.out.jump;
       this.mapper.update(this.pose, dt);
       if (this.mapper.out.jump && !wasJumping) this.onJump?.();
-      this.lockHist.push(this.pose ? 1 : 0);
-      if (this.lockHist.length > 120) this.lockHist.shift();
-      this.stats.lockRate = this.lockHist.reduce((a, b) => a + b, 0) / this.lockHist.length;
+      this.lockSum += (this.pose ? 1 : 0) - this.lockHist[this.lockAt];
+      this.lockHist[this.lockAt] = this.pose ? 1 : 0;
+      this.lockAt = (this.lockAt + 1) % LOCK_WINDOW;
+      this.lockN = Math.min(LOCK_WINDOW, this.lockN + 1);
+      this.stats.lockRate = this.lockSum / this.lockN;
     }
 
-    this.fpsHist.push(1 / dt);
-    if (this.fpsHist.length > 30) this.fpsHist.shift();
-    this.stats.fps = this.fpsHist.reduce((a, b) => a + b, 0) / this.fpsHist.length;
+    this.fpsSum += 1 / dt - this.fpsHist[this.fpsAt];
+    this.fpsHist[this.fpsAt] = 1 / dt;
+    this.fpsAt = (this.fpsAt + 1) % FPS_WINDOW;
+    this.fpsN = Math.min(FPS_WINDOW, this.fpsN + 1);
+    this.stats.fps = this.fpsSum / this.fpsN;
     this.stats.cost = this.stats.cost * 0.9 + (performance.now() - t0) * 0.1;
     if (latency > 0) this.stats.latency = this.stats.latency * 0.9 + latency * 0.1;
     this.onFrame?.();
@@ -236,6 +279,7 @@ export class WandInput {
 
   /** `box` is in processing-canvas pixels; the left half becomes disc A, the right half disc B. */
   beginCalibration(box: Rect): Promise<CalibrationResult | CalibrationError> {
+    this.cancelCalibration();
     this.sampler.reset();
     this.calBox = box;
     this.calFrames = 0;
@@ -247,7 +291,9 @@ export class WandInput {
 
   cancelCalibration(): void {
     this.calibrating = false;
+    const done = this.calDone;
     this.calDone = null;
+    done?.('cancelled');
   }
 
   private endCalibration(): void {

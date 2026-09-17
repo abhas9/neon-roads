@@ -54,8 +54,12 @@ async function until(predicate, label, timeout = 8000) {
 // --- Camera and calibration -------------------------------------------------
 await page.click('[data-action=wand]');
 await page.waitForSelector('.wand-screen');
+// Two clicks before the permission promise resolves must still open exactly one camera.
 await page.click('[data-action=wand-enable]');
+await page.click('[data-action=wand-enable]').catch(() => {});
 await page.waitForSelector('[data-action=wand-calibrate]', { timeout: 15000 });
+const gum = await page.evaluate(() => window.__gumCalls);
+check(gum === 1, 'a double-click on Enable opens exactly one camera', `${gum} getUserMedia call(s)`);
 log('camera started');
 const sawColour = await until(
   () => Number(document.querySelector(".v-left")?.textContent) > 50 && Number(document.querySelector(".v-right")?.textContent) > 50,
@@ -67,6 +71,25 @@ const counts = await page.evaluate(() => ({
 }));
 check(sawColour, 'both marker colours show in the live calibration readout', JSON.stringify(counts));
 if (shots) await page.screenshot({ path: `${shots}/wand-calibrate.png` });
+
+// Walking away mid-sample must abandon the calibration rather than leave it pending.
+// Both clicks go in one task so sampling cannot finish in the gap between them.
+await page.evaluate(() => {
+  document.querySelector('[data-action=wand-calibrate]').click();
+  document.querySelector('[data-action=back]').click();
+});
+await page.waitForSelector('.title-screen', { timeout: 8000 });
+check(!(await wand()).calibrated, 'leaving mid-calibration does not commit a half-sampled model');
+await page.click('[data-action=wand]');
+const reusable = await page
+  .waitForSelector('[data-action=wand-calibrate]', { timeout: 15000 })
+  .then(() => true)
+  .catch(async () => {
+    log('  (panel:', JSON.stringify(await page.textContent('.wand-side')), ')');
+    return false;
+  });
+check(reusable, 'the wand screen is usable again after leaving mid-calibration');
+await page.waitForTimeout(500);
 
 await page.click('[data-action=wand-calibrate]');
 await page.waitForSelector('[data-action=wand-recentre]', { timeout: 15000 });

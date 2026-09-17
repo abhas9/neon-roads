@@ -206,6 +206,115 @@ describe('wand detection robustness', () => {
   });
 });
 
+/** Per-channel gain: coloured ambient light, such as the game's own magenta glow on the player. */
+function tint(d: Uint8ClampedArray, kr: number, kg: number, kb: number): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(d);
+  for (let i = 0; i < out.length; i += 4) {
+    out[i] *= kr;
+    out[i + 1] *= kg;
+    out[i + 2] *= kb;
+  }
+  return out;
+}
+
+/** Quantises chroma in 2x2 blocks, as subsampled webcam output does. */
+function subsample(d: Uint8ClampedArray): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(d);
+  for (let y = 0; y < H; y += 2) {
+    for (let x = 0; x < W; x += 2) {
+      for (let k = 0; k < 3; k++) {
+        let sum = 0;
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) sum += d[((y + dy) * W + x + dx) * 4 + k];
+        const avg = sum / 4;
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) out[((y + dy) * W + x + dx) * 4 + k] = avg;
+      }
+    }
+  }
+  return out;
+}
+
+describe('wand detection under adverse conditions', () => {
+  const model = calibrate();
+
+  it('tracks a disc half covered by fingers', () => {
+    const d = wandFrame(80, 60);
+    // A thumb across the lower half of the magenta disc.
+    for (let y = 60; y < 70; y++) for (let x = 48; x < 70; x++) {
+      const i = (y * W + x) * 4;
+      d[i] = 214; d[i + 1] = 168; d[i + 2] = 140;
+    }
+    const { a, b } = detect(d, W, H, model);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    // The centroid shifts up onto the visible part; it must not jump off the disc entirely.
+    expect(Math.abs(a!.px - 58)).toBeLessThan(4);
+  });
+
+  it('reports only one disc when the other leaves the frame', () => {
+    const d = blank();
+    disc(d, 58, 60, 7, MAGENTA);
+    const { a, b } = detect(d, W, H, model);
+    expect(a).not.toBeNull();
+    expect(b).toBeNull();
+  });
+
+  it('survives chroma subsampling', () => {
+    const { a, b } = detect(subsample(wandFrame(80, 60)), W, H, model);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(Math.abs(a!.px - 58)).toBeLessThan(3);
+  });
+
+  it('survives a moderate coloured cast from ambient light', () => {
+    const { a, b } = detect(tint(wandFrame(80, 60), 1.1, 0.97, 1.05), W, H, model);
+    expect(a, 'magenta under a magenta cast').not.toBeNull();
+    expect(b, 'cyan under a magenta cast').not.toBeNull();
+  });
+
+  it('still finds the discs in a dimly lit room', () => {
+    const { a, b } = detect(dim(wandFrame(80, 60), 0.3), W, H, model);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+  });
+
+  it('gives up rather than guessing when the room is nearly black', () => {
+    const { a, b } = detect(dim(wandFrame(80, 60), 0.05), W, H, model);
+    expect(a).toBeNull();
+    expect(b).toBeNull();
+  });
+
+  it('does not match a skin-toned face filling the frame', () => {
+    const d = blank([224, 172, 142]);
+    const { a, b } = detect(d, W, H, model);
+    expect(a).toBeNull();
+    expect(b).toBeNull();
+  });
+
+  it('costs well under a millisecond per frame', () => {
+    const d = wandFrame(80, 60);
+    const gates = { a: null, b: null };
+    detect(d, W, H, model, gates);
+    const t0 = performance.now();
+    const n = 200;
+    for (let i = 0; i < n; i++) detect(d, W, H, model, gates);
+    const per = (performance.now() - t0) / n;
+    expect(per, `${per.toFixed(3)}ms per full-frame detect`).toBeLessThan(3);
+  });
+
+  it('is cheaper once gated than scanning the whole frame', () => {
+    const d = wandFrame(80, 60);
+    const first = detect(d, W, H, model);
+    const gates = { a: gateFor(first.a, W, H), b: gateFor(first.b, W, H) };
+    const time = (g: typeof gates | null) => {
+      for (let i = 0; i < 50; i++) detect(d, W, H, model, g);
+      const t0 = performance.now();
+      for (let i = 0; i < 300; i++) detect(d, W, H, model, g);
+      return performance.now() - t0;
+    };
+    expect(time(gates)).toBeLessThan(time(null));
+  });
+});
+
 describe('pose', () => {
   const model = calibrate();
 
@@ -226,6 +335,18 @@ describe('pose', () => {
 
   it('reads separation shrinking as the wand moves away', () => {
     expect(pose(80, 60, 30).sep).toBeGreaterThan(pose(80, 60, 18).sep);
+  });
+
+  it('measures the same angle wherever the wand sits in frame', () => {
+    const a = pose(80, 60, 22, 0.4).angle;
+    const b = pose(46, 34, 22, 0.4).angle;
+    expect(b).toBeCloseTo(a, 1);
+  });
+
+  it('normalises by height, so angles are not skewed by the frame aspect', () => {
+    // A wand with equal pixel run and rise must read 45 degrees, not atan of a stretched ratio.
+    const p = pose(80, 60, 22, Math.PI / 4);
+    expect(p.angle).toBeCloseTo(Math.PI / 4, 1);
   });
 });
 

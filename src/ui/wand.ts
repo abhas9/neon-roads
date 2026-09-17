@@ -59,6 +59,14 @@ export class WandScreen {
     this.raf = 0;
     this.root = null;
     this.wand.previewBox = null;
+    // Leaving mid-sample must abandon the calibration, or it completes against a box the player
+    // has walked away from and resolves into a screen that is no longer on show.
+    if (this.step === 'sampling') {
+      this.wand.cancelCalibration();
+      this.step = 'aim';
+    }
+    // Persist on the way out too, so a calibration is kept even if the player never pressed Play.
+    this.wand.save();
   }
 
   render(): void {
@@ -183,6 +191,7 @@ export class WandScreen {
     this.render();
     const box = calibrationBox(this.wand.width, this.wand.height);
     const res = await this.wand.beginCalibration(box);
+    if (res === 'cancelled') return;
     if (typeof res === 'string') {
       this.lastError = res;
       this.step = 'aim';
@@ -190,12 +199,8 @@ export class WandScreen {
       this.wand.mapper.reset();
       this.applyTuning();
       this.step = 'live';
-      // Neutral comes from the first tracked pose after calibration, so whatever the player was
-      // holding during sampling becomes level.
-      window.setTimeout(() => {
-        this.wand.recentre();
-        this.wand.save();
-      }, 250);
+      // Neutral needs no extra step here: calibration clears it, and the mapper adopts the first
+      // tracked pose, which is whatever the player was holding while sampling.
     }
     this.render();
   }
