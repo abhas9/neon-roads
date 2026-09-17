@@ -2,6 +2,7 @@
 // Usage: node tools/readme-shots.mjs <baseUrl> [w1r1-tape.json from tools/solve-tape.ts]
 import { readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright';
+import { fakeCamera } from './fake-camera.mjs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5287/';
 const tapeInfo = process.argv[3] ? JSON.parse(readFileSync(process.argv[3], 'utf8')) : null;
@@ -149,6 +150,36 @@ if (tapeInfo) {
   await phone.screenshot({ path: `${out}/phone-pad.jpg`, ...jpeg });
   await host.screenshot({ path: `${out}/phone-driving.jpg`, ...jpeg });
   await phoneCtx.close();
+  await ctx.close();
+}
+
+// Wand controller: the setup screen with a synthetic camera standing in for a webcam.
+{
+  const { ctx, page } = await desktop(unlocked);
+  await ctx.addInitScript(fakeCamera);
+  await page.goto(base);
+  await page.waitForTimeout(900);
+  await page.click('[data-action=wand]');
+  await page.waitForSelector('.wand-screen');
+  await page.click('[data-action=wand-enable]');
+  await page.waitForSelector('[data-action=wand-calibrate]', { timeout: 20000 });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${out}/wand-calibrate.jpg`, ...jpeg });
+  await page.click('[data-action=wand-calibrate]');
+  await page.waitForSelector('[data-action=wand-recentre]', { timeout: 20000 });
+  await page.evaluate(() => window.__wand.set({ angle: 0.45, half: 0.168 }));
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${out}/wand-tuning.jpg`, ...jpeg });
+  await ctx.close();
+}
+
+// The printable marker sheet.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1000, height: 660 } });
+  const page = await ctx.newPage();
+  await page.goto(`${base}marker.html`);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${out}/wand-marker.jpg`, ...jpeg });
   await ctx.close();
 }
 

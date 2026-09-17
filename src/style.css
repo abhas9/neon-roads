@@ -121,6 +121,8 @@ kbd {
 .panel {
   width: min(560px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 26px 28px; text-align: center;
   backdrop-filter: blur(10px); box-shadow: 0 0 60px rgba(255, 47, 180, .12), 0 20px 60px rgba(0,0,0,.5); max-height: 100%; overflow-y: auto;
+  /* Flex items default to min-height:auto, which lets a tall panel push past max-height. */
+  min-height: 0;
 }
 .panel.small { width: min(360px, 100%); }
 .panel.wide { width: min(980px, 100%); text-align: left; }
@@ -364,7 +366,12 @@ input[type=range] { width: 180px; accent-color: var(--pink); }
 .wand-bar i { position: absolute; top: 0; bottom: 0; background: var(--cyan); transition: width .06s linear, left .06s linear; }
 .wand-bar.throttle i { background: var(--pink); }
 .wand-bar.flick i { background: var(--gold); }
-.wand-slider { margin-bottom: 4px; }
+.wand-slider { margin-bottom: 2px; padding: 4px 0; }
+/* The live step stacks a preview, meters, three sliders, a toggle and four buttons: keep the
+   controls tight so the whole thing still fits a 720px-tall window without scrolling. */
+.wand-screen .wand-side .actions { margin-top: 12px; gap: 8px; }
+.wand-screen .wand-side .actions .btn { padding: 9px 14px; font-size: 13px; }
+.wand-screen .wand-side > .setting.toggle { padding: 7px 10px; }
 .wand-slider small { display: block; color: var(--dim); font-size: 12px; letter-spacing: 0; text-transform: none; }
 .chip.wand-chip { color: #ffc7ef; border-color: rgba(255,47,180,.45); text-shadow: 0 0 8px rgba(255,47,180,.7); }
 .chip.wand-chip.warn { color: var(--gold); border-color: rgba(255,210,63,.5); text-shadow: none; }
