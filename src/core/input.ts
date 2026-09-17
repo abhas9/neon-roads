@@ -14,7 +14,10 @@ export class Input {
   /** Phone controller state, filled by RemoteHost each frame. */
   remote = { steer: 0, throttle: 0, jump: false, active: false };
   remoteSource: ((out: Input['remote']) => void) | null = null;
-  lastDevice: 'keyboard' | 'gamepad' | 'touch' | 'remote' = 'keyboard';
+  /** Camera wand state, filled by WandInput each frame. */
+  wand = { steer: 0, throttle: 0, jump: false, active: false };
+  wandSource: ((out: Input['wand']) => void) | null = null;
+  lastDevice: 'keyboard' | 'gamepad' | 'touch' | 'remote' | 'wand' = 'keyboard';
 
   constructor() {
     window.addEventListener('keydown', (e) => {
@@ -26,6 +29,7 @@ export class Input {
         if (code === 'KeyR') this.fire('restart');
         if (code === 'Escape' || code === 'KeyP') this.fire('pause');
         if (code === 'KeyG') this.fire('ghost');
+        if (code === 'KeyC') this.fire('recentre');
         const menu: Record<string, MenuAction> = {
           ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
           KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right',
@@ -43,7 +47,7 @@ export class Input {
     });
   }
 
-  on(name: 'restart' | 'pause' | 'ghost' | 'any', fn: () => void): void {
+  on(name: 'restart' | 'pause' | 'ghost' | 'recentre' | 'any', fn: () => void): void {
     (this.listeners[name] ??= []).push(fn);
   }
 
@@ -52,7 +56,7 @@ export class Input {
   }
 
   /** Injects a discrete button from another device (phone controller). */
-  emit(name: 'restart' | 'pause' | 'ghost' | 'any' | MenuAction): void {
+  emit(name: 'restart' | 'pause' | 'ghost' | 'recentre' | 'any' | MenuAction): void {
     if (['up', 'down', 'left', 'right', 'confirm', 'back'].includes(name)) {
       for (const l of this.menuListeners) l(name as MenuAction);
       if (name === 'confirm') this.fire('any');
@@ -135,6 +139,18 @@ export class Input {
         if (Math.abs(this.remote.throttle) > 0.02) throttle = this.remote.throttle;
         jump = jump || this.remote.jump;
         if (this.remote.jump || Math.abs(this.remote.steer) > 0.02) this.lastDevice = 'remote';
+      }
+    }
+
+    if (this.wandSource) {
+      this.wandSource(this.wand);
+      if (this.wand.active) {
+        if (Math.abs(this.wand.steer) > 0.02) steer = this.wand.steer;
+        if (Math.abs(this.wand.throttle) > 0.02) throttle = this.wand.throttle;
+        // Jump is OR'd rather than replaced: a flick is ~100ms slower than a key, so the wand is
+        // designed to be played alongside the keyboard rather than instead of it.
+        jump = jump || this.wand.jump;
+        if (this.wand.jump || Math.abs(this.wand.steer) > 0.02) this.lastDevice = 'wand';
       }
     }
 

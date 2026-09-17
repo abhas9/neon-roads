@@ -3,6 +3,7 @@
 // Usage: node tools/contrast-audit.mjs [baseUrl] [tape.json]   (tape enables the results screen)
 import { readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright';
+import { fakeCamera } from './fake-camera.mjs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5287/';
 const tapeInfo = process.argv[3] ? JSON.parse(readFileSync(process.argv[3], 'utf8')) : null;
@@ -141,6 +142,35 @@ const desktop = async (roads = progress, extraInit = null, settings = {}) => {
   await page.click('[data-action=phone]');
   await page.waitForSelector('.pair-status.ready', { timeout: 30000 }).catch(() => {});
   await audit(page, 'Phone pairing');
+  await ctx.close();
+}
+{
+  // Wand controller: a synthetic camera stands in for a webcam so the live preview, the
+  // calibration overlay and the diagnostics panel are all on screen for real.
+  const { ctx, page } = await desktop();
+  await ctx.addInitScript(fakeCamera);
+  await page.goto(base);
+  await page.waitForTimeout(1200);
+  await page.click('[data-action=wand]');
+  await page.waitForSelector('.wand-screen');
+  await audit(page, 'Wand intro');
+  await page.click('[data-action=wand-enable]');
+  await page.waitForSelector('[data-action=wand-calibrate]', { timeout: 20000 });
+  await page.waitForTimeout(700);
+  await audit(page, 'Wand calibration');
+  await page.click('[data-action=wand-calibrate]');
+  await page.waitForSelector('[data-action=wand-recentre]', { timeout: 20000 });
+  await page.waitForTimeout(900);
+  await audit(page, 'Wand tuning and diagnostics');
+  // And the in-run HUD with the wand chip alongside everything else.
+  await page.click('[data-action=wand-done]');
+  await page.waitForSelector('.title-screen, .worlds-screen', { timeout: 8000 });
+  if (await page.isVisible('[data-action=campaign]')) await page.click('[data-action=campaign]');
+  await page.waitForSelector('.worlds-screen');
+  await page.click('[data-action=road]');
+  await page.waitForFunction(() => document.querySelector('.hud-timer')?.textContent !== '00:00.00', null, { timeout: 15000 });
+  await page.waitForTimeout(600);
+  await audit(page, 'HUD with wand chip');
   await ctx.close();
 }
 {

@@ -7,6 +7,13 @@ export interface Settings {
   bloom: boolean;
   quality: 'high' | 'low';
   touchControls: 'auto' | 'on' | 'off';
+  /** Wand tilt, in degrees, that gives full steering. Lower is twitchier. */
+  wandSensitivity: number;
+  /** Fractional change in disc separation that gives full throttle. */
+  wandThrottle: number;
+  /** Upward flick speed that fires a jump. */
+  wandFlick: number;
+  wandInvert: boolean;
 }
 
 export interface RoadRecord {
@@ -39,6 +46,10 @@ export const DEFAULT_SETTINGS: Settings = {
   bloom: true,
   quality: 'high',
   touchControls: 'auto',
+  wandSensitivity: 40,
+  wandThrottle: 0.22,
+  wandFlick: 1.8,
+  wandInvert: false,
 };
 
 export function loadSave(): SaveData {

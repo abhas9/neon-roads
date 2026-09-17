@@ -32,6 +32,7 @@ export class Hud {
   private grav: HTMLElement;
   private assist: HTMLElement;
   private ghostChip: HTMLElement;
+  private wandChip: HTMLElement;
   private msg: HTMLElement;
   private msgTitle: HTMLElement;
   private msgSub: HTMLElement;
@@ -81,6 +82,7 @@ export class Hud {
     this.grav = el('div', 'chip grav', chips);
     this.assist = el('div', 'chip assist', chips, 'ASSIST');
     this.ghostChip = el('div', 'chip ghost-chip hidden', chips);
+    this.wandChip = el('div', 'chip wand-chip hidden', chips);
 
     this.msg = el('div', 'hud-msg hidden', this.root);
     this.msgTitle = el('div', 'hud-msg-title', this.msg);
@@ -110,6 +112,15 @@ export class Hud {
     this.set(this.roadName, cfg.title);
     this.progressWrap.classList.toggle('endless', cfg.mode === 'endless');
     this.lastGrav = -1;
+  }
+
+  /** Camera wand tracking state, shown only while the wand is switched on. */
+  setWand(state: 'off' | 'searching' | 'tracking' | 'lost'): void {
+    this.wandChip.classList.toggle('hidden', state === 'off');
+    if (state === 'off') return;
+    this.set(this.wandChip, state === 'tracking' ? 'WAND' : state === 'lost' ? 'WAND LOST' : 'WAND …');
+    this.wandChip.classList.toggle('bad', state === 'lost');
+    this.wandChip.classList.toggle('warn', state === 'searching');
   }
 
   update(s: ShipState, ghost: ShipState | null, cfg: RunConfig, assistOn: boolean): void {

@@ -18,11 +18,13 @@ import { Hud } from './ui/hud';
 import { TouchControls } from './ui/touch';
 import * as S from './ui/screens';
 import { RemoteHost } from './net/remoteHost';
+import { WandInput } from './wand/wandInput';
+import { WandScreen } from './ui/wand';
 import { Ev } from './sim/ship';
 import { V_MAX } from './sim/constants';
 import qrcode from 'qrcode-generator';
 
-type Screen = 'title' | 'worlds' | 'playing' | 'paused' | 'results' | 'settings' | 'help' | 'phone';
+type Screen = 'title' | 'worlds' | 'playing' | 'paused' | 'results' | 'settings' | 'help' | 'phone' | 'wand';
 
 const pars = PARS as Record<string, number>;
 
@@ -44,6 +46,12 @@ class App {
   private menuWorld = 0;
   private last = performance.now();
   private remote = new RemoteHost();
+  private wand = new WandInput();
+  private wandScreen: WandScreen;
+  /** True once the wand has been lost long enough to auto-pause; cleared when tracking returns. */
+  private wandPaused = false;
+  /** Whether the wand drove any part of the current run, for the shared scorecard. */
+  private wandRun = false;
   private hudPush = 0;
   private toastEl: HTMLElement;
   private lastScore: Score | null = null;
@@ -58,6 +66,10 @@ class App {
     this.touch = new TouchControls(this.ui, this.input, () => this.togglePause());
     this.session = new Session(this.view, this.audio, this.input, this.hud, () => this.save.settings);
     this.session.onEnd = (r) => this.onRunEnd(r);
+    this.wandScreen = new WandScreen(this.wand, () => this.settings, () => this.leaveWand());
+    this.input.wandSource = (o) => this.wand.read(o);
+    // Restore a previous session's colour model, but never open the camera unasked.
+    this.wand.load();
     this.toastEl = document.createElement('div');
     this.toastEl.className = 'toast hidden';
     this.ui.appendChild(this.toastEl);
@@ -66,6 +78,18 @@ class App {
     if (this.test) {
       this.test.fireworkLoad = () => this.view.fireworkLoad;
       this.test.screen = () => this.screen;
+      this.test.wand = () => ({
+        state: this.wand.state,
+        steer: this.wand.mapper.out.steer,
+        throttle: this.wand.mapper.out.throttle,
+        jump: this.wand.mapper.out.jump,
+        status: this.wand.mapper.status,
+        lock: this.wand.stats.lockRate,
+        fps: this.wand.stats.fps,
+        cost: this.wand.stats.cost,
+        calibrated: !!this.wand.model,
+      });
+      this.test.ship = () => ({ x: this.session.ship.x, y: this.session.ship.y, z: this.session.ship.z, vz: this.session.ship.vz });
     }
 
     this.applySettings();
@@ -112,6 +136,16 @@ class App {
     } catch {
       // Storage unavailable.
     }
+  }
+
+  private wandLabel(): string {
+    if (this.wand.state === 'ready') return this.wand.model ? 'tracking' : 'needs calibration';
+    if (this.wand.state === 'denied') return 'camera blocked';
+    return this.wand.model ? 'calibrated · tap to start' : 'steer with a printed marker';
+  }
+
+  private leaveWand(): void {
+    this.show(this.current ? 'worlds' : 'title');
   }
 
   private phoneLabel(): string {
@@ -174,6 +208,7 @@ class App {
       pixelRatio: s.quality === 'high' ? Math.min(window.devicePixelRatio, 2) : Math.min(window.devicePixelRatio, 1) * 0.75,
     });
     this.updateTouchVisibility();
+    this.wandScreen.applyTuning();
   }
 
   private updateTouchVisibility(): void {
@@ -196,6 +231,10 @@ class App {
       if (this.screen === 'playing' || this.screen === 'paused') this.togglePause();
     });
     this.input.on('ghost', () => this.toggleGhost());
+    this.input.on('recentre', () => {
+      if (this.wand.state !== 'ready') return;
+      this.toast(this.wand.recentre() ? '🪄 Neutral pose set' : 'Hold the wand up first');
+    });
     this.input.on('any', () => {
       if (this.screen === 'playing') this.session.skipDeath();
     });
@@ -271,6 +310,31 @@ class App {
         this.remote.start();
         this.show('phone');
         break;
+      case 'wand':
+        this.show('wand');
+        break;
+      case 'wand-enable':
+        void this.wandScreen.enable();
+        break;
+      case 'wand-calibrate':
+        void this.wandScreen.calibrate();
+        break;
+      case 'wand-recalibrate':
+        this.wandScreen.recalibrate();
+        break;
+      case 'wand-recentre':
+        this.toast(this.wand.recentre() ? '🪄 Neutral pose set' : 'Hold the wand up first');
+        break;
+      case 'wand-done':
+        this.wandScreen.done();
+        break;
+      case 'wand-off':
+        this.wand.stop();
+        this.wandScreen.step = 'intro';
+        this.wandScreen.render();
+        break;
+      case 'wand-print':
+        return;
       case 'phone-new-code':
         this.remote.newCode();
         break;
@@ -289,7 +353,7 @@ class App {
         break;
       case 'back':
         if (this.screen === 'settings') this.show(this.settingsReturn === 'paused' ? 'paused' : this.settingsReturn);
-        else if (this.screen === 'phone') this.show('title');
+        else if (this.screen === 'phone' || this.screen === 'wand') this.show('title');
         else this.show('title');
         break;
       case 'road':
@@ -322,9 +386,15 @@ class App {
   }
 
   private show(screen: Screen): void {
+    if (this.screen === 'wand' && screen !== 'wand') this.wandScreen.unmount();
     this.screen = screen;
     let html = '';
     switch (screen) {
+      case 'wand':
+        this.screenEl.dataset.screen = screen;
+        this.wandScreen.mount(this.screenEl);
+        this.focusFirst();
+        return;
       case 'phone':
         this.screen = screen;
         this.screenEl.dataset.screen = screen;
@@ -332,7 +402,7 @@ class App {
         this.renderPhone();
         return;
       case 'title':
-        html = S.titleScreen(this.save, this.dailyLabel(), this.phoneLabel());
+        html = S.titleScreen(this.save, this.dailyLabel(), this.phoneLabel(), this.wandLabel());
         this.audio.playMusic(10, 0.3);
         break;
       case 'worlds':
@@ -502,6 +572,7 @@ class App {
   }
 
   private beginRun(cfg: RunConfig, music: number): void {
+    this.wandRun = false;
     this.session.start(cfg);
     this.view.setGhostLabel(cfg.ghost ? (cfg.ghostTime ? `BEST ${formatTime(cfg.ghostTime)}` : cfg.bestDistance ? `BEST ${cfg.bestDistance} m` : 'BEST RUN') : null);
     this.audio.playMusic(music, 0.5);
@@ -582,6 +653,28 @@ class App {
     return InputTape.decode(auto.tape);
   }
 
+  /**
+   * Auto-pauses when the camera loses the wand. Without this, reaching for a drink mid-run means
+   * the ship keeps its last heading into a wall, and campaign mode restarts instantly, over and
+   * over. Only fires once per loss so resuming by keyboard is not immediately undone.
+   */
+  private watchWand(): void {
+    if (this.wand.state !== 'ready' || !this.wand.model) {
+      this.hud.setWand('off');
+      return;
+    }
+    this.hud.setWand(this.wand.mapper.status);
+    const lost = this.wand.mapper.status === 'lost';
+    if (!lost) {
+      this.wandPaused = false;
+      return;
+    }
+    if (this.wandPaused || this.screen !== 'playing' || !this.session.running) return;
+    this.wandPaused = true;
+    this.toast('🪄 Wand out of view — paused');
+    this.togglePause();
+  }
+
   private togglePause(): void {
     if (this.screen === 'playing' && this.session.running) {
       this.session.paused = true;
@@ -630,6 +723,7 @@ class App {
         attempts: this.session.attempts,
         newRecord: newRecord && !!prevBest,
         assist: r.assist,
+        wand: this.wandRun,
       };
       // The session keeps rendering the fly-out and fireworks behind the results panel.
       this.showHtml(
@@ -679,7 +773,7 @@ class App {
       }
       this.persist();
       const [title, sub] = r.cause ? DEATH_TEXT[r.cause] : ['RUN OVER', ''];
-      this.lastScore = { kind: 'distance', daily, label: c.label, distance: r.distance, best, time: r.time, newRecord, endedBy: title };
+      this.lastScore = { kind: 'distance', daily, label: c.label, distance: r.distance, best, time: r.time, newRecord, endedBy: title, wand: this.wandRun };
       this.leaveRun();
       this.showHtml(S.endlessResults({ daily, label: c.label, distance: r.distance, best, newRecord, cause: title, sub, time: r.time }), 'results');
     }
@@ -689,8 +783,10 @@ class App {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const inRun = this.screen === 'playing' || this.screen === 'paused' || (this.screen === 'settings' && this.settingsReturn === 'paused');
+    this.watchWand();
     if ((inRun || (this.screen === 'results' && this.session.celebrating)) && this.session.cfg) {
       this.session.update(dt);
+      if (this.input.wand.active && (Math.abs(this.input.wand.steer) > 0.02 || this.input.wand.jump)) this.wandRun = true;
       this.hudPush -= dt;
       if (this.remote.count && this.hudPush <= 0) {
         this.hudPush = 0.2;
@@ -714,6 +810,10 @@ interface NeonTestHook {
   fireworkLoad?: () => number;
   screen?: () => string;
   lastShare?: { card: string; intent: string; opened: boolean };
+  /** Live wand tracking and mapping state, for the camera end-to-end check. */
+  wand?: () => { state: string; steer: number; throttle: number; jump: boolean; status: string; lock: number; fps: number; cost: number; calibrated: boolean };
+  /** Ship position, so a test can prove input actually reached the simulation. */
+  ship?: () => { x: number; y: number; z: number; vz: number };
 }
 
 new App();
