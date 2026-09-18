@@ -7,6 +7,12 @@ export interface Settings {
   bloom: boolean;
   quality: 'high' | 'low';
   touchControls: 'auto' | 'on' | 'off';
+  /** Wheel tilt, in degrees, that gives full steering. */
+  handSteerRange: number;
+  /** Hand travel, as a fraction of frame height, for full throttle. */
+  handThrottleRange: number;
+  /** Openness above which a hand counts as open, which is what fires a jump. */
+  handOpen: number;
 }
 
 export interface RoadRecord {
@@ -39,6 +45,9 @@ export const DEFAULT_SETTINGS: Settings = {
   bloom: true,
   quality: 'high',
   touchControls: 'auto',
+  handSteerRange: 35,
+  handThrottleRange: 0.14,
+  handOpen: 0.68,
 };
 
 export function loadSave(): SaveData {

@@ -2,6 +2,8 @@
 // Usage: node tools/readme-shots.mjs <baseUrl> [w1r1-tape.json from tools/solve-tape.ts]
 import { readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright';
+import { fakeCamera } from './fake-camera.mjs';
+import { fakeHands } from './fake-hands.mjs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5287/';
 const tapeInfo = process.argv[3] ? JSON.parse(readFileSync(process.argv[3], 'utf8')) : null;
@@ -149,6 +151,24 @@ if (tapeInfo) {
   await phone.screenshot({ path: `${out}/phone-pad.jpg`, ...jpeg });
   await host.screenshot({ path: `${out}/phone-driving.jpg`, ...jpeg });
   await phoneCtx.close();
+  await ctx.close();
+}
+
+// Hand controller, with a synthetic detector so the shot needs no model download.
+{
+  const { ctx, page } = await desktop(unlocked);
+  await ctx.addInitScript(fakeCamera);
+  await ctx.addInitScript(fakeHands);
+  await page.goto(base);
+  await page.waitForTimeout(900);
+    await page.click('[data-action=hand]');
+  await page.waitForSelector('.hand-screen');
+  await page.click('[data-action=hand-enable]');
+  await page.waitForSelector('[data-action=hand-recentre]', { timeout: 20000 });
+  // Both hands gripping the wheel, turned slightly, with the left hand open mid-jump.
+  await page.evaluate(() => window.__hands.set({ right: { x: -0.24, y: -0.07, curl: 1 }, left: { x: 0.24, y: 0.07, curl: 0 } }));
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${out}/hand-tuning.jpg`, ...jpeg });
   await ctx.close();
 }
 

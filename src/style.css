@@ -35,7 +35,25 @@ kbd {
 .screens[data-screen='playing'] .screen { pointer-events: none; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-.title-screen { background: radial-gradient(ellipse 60% 55% at 50% 62%, rgba(7,2,26,.55), transparent 75%), linear-gradient(180deg, rgba(7,2,26,.6), rgba(7,2,26,.2) 40%, rgba(7,2,26,.7)); gap: 5vh; }
+.title-screen { background: radial-gradient(ellipse 60% 55% at 50% 62%, rgba(7,2,26,.55), transparent 75%), linear-gradient(180deg, rgba(7,2,26,.6), rgba(7,2,26,.2) 40%, rgba(7,2,26,.7)); gap: clamp(14px, 5vh, 56px); }
+/*
+ * The title menu grows every time a controller is added, and the footer hint is positioned
+ * absolutely, so a menu that outgrows the window silently slides underneath it and swallows
+ * clicks. Tighten with available height instead of assuming a fixed number of entries.
+ */
+@media (max-height: 900px) {
+  .title-screen .btn { padding: 10px 18px; font-size: 14px; }
+  .title-screen .btn small { font-size: 13px; }
+  .title-screen .menu { gap: 7px; }
+}
+@media (max-height: 780px) {
+  .title-screen .btn { padding: 7px 16px; font-size: 13px; }
+  .title-screen .btn small { font-size: 12px; }
+  .title-screen .menu { gap: 5px; }
+  .title-screen .logo-sub { font-size: 13px; }
+  /* The logo is sized from viewport width; in a short, wide window that alone fills the screen. */
+  .title-screen .logo-main { font-size: min(clamp(40px, 9vw, 120px), 13vh); }
+}
 .logo { text-align: center; }
 .logo-main {
   font-family: var(--display); font-weight: 900; font-size: clamp(44px, 9vw, 120px); letter-spacing: .06em; line-height: 1; position: relative;
@@ -121,6 +139,8 @@ kbd {
 .panel {
   width: min(560px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 26px 28px; text-align: center;
   backdrop-filter: blur(10px); box-shadow: 0 0 60px rgba(255, 47, 180, .12), 0 20px 60px rgba(0,0,0,.5); max-height: 100%; overflow-y: auto;
+  /* Flex items default to min-height:auto, which lets a tall panel push past max-height. */
+  min-height: 0;
 }
 .panel.small { width: min(360px, 100%); }
 .panel.wide { width: min(980px, 100%); text-align: left; }
@@ -323,3 +343,88 @@ input[type=range] { width: 180px; accent-color: var(--pink); }
 .btn.share-x { border-color: rgba(255,255,255,.5); background: linear-gradient(90deg, #0b0b0f, #1c1c24); justify-content: center; }
 .btn.share-x:hover, .btn.share-x:focus { border-color: #fff; background: linear-gradient(90deg, #15151c, #2b2b36); }
 .x-mark { font-size: 18px; font-weight: 900; line-height: 1; margin-right: 2px; }
+
+/* ---------- Camera controller setup screen ---------- */
+.tag-exp {
+  justify-self: end; align-self: center; font-family: var(--display); font-size: 10px; letter-spacing: .22em;
+  text-transform: uppercase; padding: 4px 9px; border-radius: 3px; color: #ffe27a;
+  border: 1px solid rgba(255,210,63,.5); background: rgba(255,210,63,.12);
+}
+.cam-grid { display: grid; grid-template-columns: minmax(260px, 460px) 1fr; gap: 26px; align-items: start; margin-top: 8px; }
+.cam-view {
+  position: relative; border-radius: 10px; overflow: hidden; background: #120a28;
+  border: 1px solid var(--line); box-shadow: 0 0 36px rgba(47,243,255,.22); aspect-ratio: 4 / 3;
+}
+.cam-preview { width: 100%; height: 100%; display: block; }
+.cam-off { position: absolute; inset: 0; display: grid; place-items: center; font-size: 54px; opacity: .72; }
+.cam-side > p:first-child { margin-top: 0; }
+.cam-steps { margin: 0 0 14px; padding-left: 20px; line-height: 1.7; }
+.cam-steps b { color: #fff; }
+.cam-error { color: #ffb3a8; background: rgba(255,59,47,.12); border-left: 3px solid #ff3b2f; padding: 9px 12px; border-radius: 0 6px 6px 0; }
+.cam-readout, .cam-diag { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.cam-readout span, .cam-diag span {
+  display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 74px; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--plate);
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+}
+.cam-readout b, .cam-diag b { font-family: var(--display); font-size: 15px; letter-spacing: .04em; color: var(--text); }
+.cam-diag b.good { color: #7dff9b; }
+.cam-diag b.warn { color: var(--gold); }
+.cam-diag b.bad { color: #ff9f93; }
+.cam-progress { height: 5px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; margin-top: 12px; }
+.cam-progress i { display: block; height: 100%; background: var(--cyan); transition: width .12s linear; }
+.cam-axes { display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; }
+.cam-axes > span {
+  display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 10px;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim);
+}
+.cam-bar { position: relative; height: 10px; border-radius: 5px; background: rgba(255,255,255,.12); overflow: hidden; }
+.cam-bar::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.35); }
+.cam-bar.flick::after { display: none; }
+.cam-bar i { position: absolute; top: 0; bottom: 0; background: var(--cyan); transition: width .06s linear, left .06s linear; }
+.cam-bar.throttle i { background: var(--pink); }
+.cam-bar.flick i { background: var(--gold); }
+.cam-slider { margin-bottom: 2px; padding: 4px 0; }
+/* The live step stacks a preview, meters, three sliders, a toggle and four buttons: keep the
+   controls tight so the whole thing still fits a 720px-tall window without scrolling. */
+.hand-screen .cam-side .actions { margin-top: 12px; gap: 8px; }
+.hand-screen .cam-side .actions .btn { padding: 9px 14px; font-size: 13px; }
+.hand-screen .cam-side > .setting.toggle { padding: 7px 10px; }
+.cam-slider small { display: block; color: var(--dim); font-size: 12px; letter-spacing: 0; text-transform: none; }
+.chip.cam-chip { color: #ffc7ef; border-color: rgba(255,47,180,.45); text-shadow: 0 0 8px rgba(255,47,180,.7); }
+.chip.cam-chip.warn { color: var(--gold); border-color: rgba(255,210,63,.5); text-shadow: none; }
+.chip.cam-chip.bad { color: #000; background: #ff9f93; border-color: #ff9f93; text-shadow: none; }
+@media (max-width: 860px) {
+  .cam-grid { grid-template-columns: 1fr; }
+  .cam-view { max-width: 460px; }
+}
+
+/* ---------- Hand controller ---------- */
+.cam-bar.open::after { display: none; }
+.cam-bar.open i { background: #8ffcff; }
+.cam-bar.open.jump i { background: #ffa8dd; }
+.cam-bar .mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+.hand-load {
+  position: absolute; inset: auto 0 0 0; padding: 12px 14px; background: rgba(8,3,24,.86);
+  display: flex; flex-direction: column; gap: 7px; backdrop-filter: blur(4px);
+}
+.hand-load-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,.16); overflow: hidden; }
+.hand-load-bar i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s linear; }
+.hand-load-text { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--text); }
+.hand-screen .cam-side .actions { margin-top: 12px; gap: 8px; }
+.hand-screen .cam-side .actions .btn { padding: 9px 14px; font-size: 13px; }
+.hand-screen .cam-side > .setting { padding: 6px 0; }
+.hand-screen .cam-side .seg { flex-wrap: wrap; }
+.jump-pill {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  font-family: var(--display); font-size: 10px; font-style: normal; letter-spacing: .14em;
+  padding: 2px 6px; border-radius: 2px; background: #140a2e; color: var(--dim);
+}
+.jump-pill.on { background: #7dff9b; color: #04120a; opacity: 1; box-shadow: 0 0 10px rgba(125,255,155,.8); }
+.hand-screen .cam-slider { padding: 2px 0; margin-bottom: 0; }
+.hand-screen .cam-slider small { font-size: 11px; }
+.hand-screen .cam-axes { gap: 7px; margin-bottom: 10px; }
+.hand-screen .cam-diag { margin: 10px 0; }
+.hand-screen .cam-side > p.small:last-child { margin-bottom: 0; }
+.hand-load.failed .hand-load-bar i { background: #ff6b5c; }
+.hand-load.failed .hand-load-text { color: #ffb3a8; text-transform: none; letter-spacing: 0; font-size: 13px; }

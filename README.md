@@ -29,6 +29,7 @@ It's a tribute to **SkyRoads**, the 1993 DOS classic by BlueMoon Software.
 - [Holographic ghost ship](#holographic-ghost-ship)
 - [Victory celebration and Share on X](#victory-celebration-and-share-on-x)
 - [Use your phone as a controller](#use-your-phone-as-a-controller)
+- [Hand controller: fly with your bare hands](#hand-controller-fly-with-your-bare-hands)
 - [Run locally](#run-locally)
 - [Deploy to GitHub Pages](#deploy-to-github-pages)
 - [Project structure](#project-structure)
@@ -92,6 +93,7 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 - 📅 **Daily Run:** the same generated road for everyone on a given day, with a ghost of your best attempt.
 - 🚀 **Boost overdrive:** boost pads push you past top speed, which makes boost-then-jump a skill of its own.
 - 📱 **Phone as controller:** scan a QR code and your phone becomes a wireless gamepad over peer-to-peer WebRTC.
+- 🖐 **Hand controller (experimental):** grip an invisible steering wheel with both hands — turn to steer, raise or lower to change speed, open a hand to jump. Webcam only, nothing to hold. See [Hand controller](#hand-controller-fly-with-your-bare-hands).
 - 🎮 **Input:** keyboard (with analog steering ramp), gamepad (analog stick and triggers), and on-screen touch controls.
 - 👓 **Readable over any world:** every screen passes a WCAG AA contrast audit. Menu, HUD and label text sits on frosted backplates, so it stays legible over bright suns, moons and floors.
 - ♿ **Colour-independent tiles:** every special tile also has an animated pattern (plus sign, chevrons, dots, stripes, hazard bars), so you don't need to tell colours apart. Also optional jump assist and a reduced-motion setting.
@@ -115,6 +117,8 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 | **Glass Moon: low gravity, long falls** | **Event Horizon: gravity stops making sense** |
 | <img src="docs/screenshots/phone-pairing.jpg" alt="Phone controller pairing screen with QR code"> | <img src="docs/screenshots/phone-pad.jpg" alt="Phone controller pad with steering stick and jump button"> |
 | **Pair a phone with a QR code** | **The phone becomes the gamepad** |
+| <img src="docs/screenshots/hand-tuning.jpg" alt="Hand controller screen showing two tracked hand skeletons gripping an invisible wheel, with steer and throttle meters"> | <img src="docs/screenshots/phone-driving.jpg" alt="Phone controller driving the ship"> |
+| **Fly with your bare hands** | **Or drive it from a phone** |
 
 <p align="center">
   <img src="docs/screenshots/mobile.jpg" alt="Mobile portrait layout with touch controls" width="22%">
@@ -132,6 +136,7 @@ Reach the glowing gate at the end of each road before your oxygen or fuel runs o
 | Restart | `R` | Y / Back | ⟲ |
 | Pause | `Esc` / `P` | Start | ❚❚ |
 | Toggle holographic ghost | `G` | X | 👻 |
+| Recentre hand tracking | `C` | — | — |
 
 **Tips**
 
@@ -240,6 +245,62 @@ Works on the hosted site and locally.
 - **Use your own broker:** to avoid the public PeerJS broker, run a [PeerServer](https://github.com/peers/peerjs-server) and build with `VITE_PEER_HOST`, `VITE_PEER_PORT`, `VITE_PEER_PATH` and `VITE_PEER_SECURE`. In GitHub Actions you can set these as repository variables.
 - **Verbose connection logs:** add `?peerdebug` to either page's URL.
 
+## Hand controller: fly with your bare hands
+
+> Experimental. Webcam only — nothing to print, nothing to hold.
+
+Hold both hands up as if gripping a steering wheel.
+
+| Gesture | Control |
+|---|---|
+| Turn the wheel — one hand up, the other down | Steer |
+| Raise or lower both hands together | Accelerate / brake |
+| Open either hand, then close it again | Jump |
+| `C`, or **Recentre** | Set the resting height for the throttle |
+
+Open **Hand Controller** on the title screen and allow the camera. Level hands mean straight
+ahead, so steering needs no calibration. A relaxed grip counts as closed; only a deliberate open
+hand jumps. Sliders adjust steering range, throttle range and how open a hand must be, with live
+per-hand bars showing where the threshold sits.
+
+Video never leaves the device: frames are processed in the page, nothing is recorded or uploaded.
+Turning the controller off releases the camera.
+
+### Design
+
+- **Steering is the angle between the palms**, not either hand's position, so shifting in your
+  seat moves both hands together and leaves the steering unchanged.
+- **Steering is the difference in hand height; throttle is their mean.** The two axes are
+  independent by construction and cannot bleed into each other.
+- **Position is read from the palm** — averaged over wrist and knuckles — which barely moves as
+  fingers curl, so opening a hand to jump does not pull the steering with it.
+- **Opening a hand is a state change**, not a velocity threshold, so it needs no confirmation
+  window: ~70 ms of latency.
+- **One open hand is one jump.** The simulation edge-triggers, so grip state is held through a
+  dropped detection frame. Close the hand to arm the next jump.
+- **Hands are identified by mirrored screen position**, not by the model's handedness label, which
+  assumes a selfie-flipped image.
+- **MediaPipe landmarks rather than skin-tone segmentation**, which would work better for some
+  skin tones and lighting than others.
+- **Lazy-loaded**, ~9 MB of runtime and weights fetched with a progress bar on first use and
+  cached after. The main bundle is unchanged, and the files are served by the site itself.
+- **Fails safe.** With one hand visible, steering falls away and the throttle holds. With neither,
+  controls fade to neutral and the run auto-pauses after 0.5 s.
+- **Cost:** 7–10 ms per frame for inference and mapping on a laptop GPU, with the game still
+  rendering at 60 fps.
+
+Building something similar? [`docs/SMART-CONTROLLERS.md`](docs/SMART-CONTROLLERS.md) covers signal
+selection, latency budgeting, and how to test a camera controller without a camera.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| "Show both hands to the camera" | Steering needs both. Sit so both fit in frame at chest height. |
+| Jumps fire unintentionally, or not at all | Watch the per-hand bars and drag **Open sensitivity** so the marker sits between your relaxed grip and your open hand. |
+| The ship creeps forward or back | Rest your hands comfortably and press `C`. |
+| Camera blocked | Browsers grant camera access only on secure origins. The hosted site and `localhost` qualify; a plain-HTTP LAN address does not. |
+
 ## Run locally
 
 Requires Node.js 20.19+ or 22.12+.
@@ -280,11 +341,13 @@ src/
   game/         Run session (fixed-step loop, ghosts, death/finish flow), medals, scorecard and X post builder
   ui/           HUD, menu screens, on-screen touch controls
   net/          Phone-controller wire protocol and WebRTC host
+  camera/       Webcam lifecycle and frame loop
+  hand/         Hand controller: landmark geometry, gesture mapping, MediaPipe runtime
   controller/   The phone controller page
   audio/        Synthesized sound effects and the procedural music sequencer
 tests/          Vitest unit tests
-tools/          Solver scripts and Playwright checks (screenshots, real-GPU render check, phone end-to-end)
-docs/           Design research and plan, screenshots
+tools/          Solver scripts and Playwright checks (screenshots, real-GPU render check, phone and hand end-to-end, contrast audit, synthetic webcam)
+docs/           Design research and plan, the smart-controller playbook, screenshots
 ```
 
 ## Authoring roads
@@ -317,13 +380,15 @@ The roads live in [`src/levels/roads/`](src/levels/roads). After editing, run `n
 
 | Command | Checks |
 |---|---|
-| `npm test` | Physics, collisions, tiles, gravity, boost, replay encoding determinism, solver |
+| `npm test` | Physics, collisions, tiles, gravity, boost, replay encoding determinism, solver, signal filtering, and hand geometry and gesture mapping against synthetic skeletons |
 | `npm run solve` | All 30 roads are beatable; updates par times |
 | `npm run solve:endless` | Windows of generated endless roads at several difficulty depths are beatable |
 | `npm run check:gpu` | Renders several worlds in installed Chrome on the real GPU and fails on black-outs or invalid bloom output (dev server must be running) |
 | `npm run e2e:phone` | Pairs a phone page with the game over real WebRTC, navigates menus and drives the ship (dev server must be running) |
+| `npm run e2e:hand` | Drives the hand controller end to end with a synthetic webcam and a stubbed landmark model, so everything downstream of the model runs for real: hand assignment, both axes and their independence, a body shift not registering as a turn, open-hand-to-jump, one open hand staying one jump, steering the actual ship, and auto-pause on tracking loss (dev server must be running) |
+| `npm run perf:hand` | Loads the **real** MediaPipe model on the GPU and measures what it costs, including the in-game frame rate with and without it. This is the part `e2e:hand` deliberately stubs (dev server must be running) |
 | `npm run e2e:celebrate` | Finishes a road by replaying a solver run. Checks the fireworks, the results screen, the Share on X link and clipboard scorecard, the saved ghost, and that `G` toggles the hologram (dev server must be running) |
-| `npm run audit:contrast` | WCAG contrast audit of every visible text on 29 screens (menus, HUD over six worlds, results, mobile, phone controller). It measures each text box against what is actually rendered behind it, including the 3D scene, and fails below AA (4.5:1, or 3:1 for large text). Needs the dev server running |
+| `npm run audit:contrast` | WCAG contrast audit of every visible text on 33 screens (menus, HUD over six worlds, results, mobile, phone controller, hand-controller setup). It measures each text box against what is actually rendered behind it, including the 3D scene, and fails below AA (4.5:1, or 3:1 for large text). Needs the dev server running |
 | `npm run shots -- <dir>` | Screenshots of every world and the mobile layout |
 
 The Playwright checks use an installed Google Chrome. Software-rendered headless browsers can miss GPU driver bugs, and some operating-system firewalls block peer-to-peer traffic for Playwright's bundled Chromium.

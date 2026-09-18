@@ -16,7 +16,7 @@ export function medalIcon(m: number, size = 'md'): string {
   return `<span class="medal m${m} ${size}" title="${MEDAL_NAMES[m]}"></span>`;
 }
 
-export function titleScreen(save: SaveData, dailyLabel: string, phoneLabel: string): string {
+export function titleScreen(save: SaveData, dailyLabel: string, phoneLabel: string, handLabel: string): string {
   const total = Object.values(save.roads).filter((r) => r.completions > 0).length;
   const golds = Object.values(save.roads).filter((r) => r.medal >= 3).length;
   return `
@@ -30,6 +30,7 @@ export function titleScreen(save: SaveData, dailyLabel: string, phoneLabel: stri
       <button class="nav btn" data-action="daily">Daily Run <small>${dailyLabel}</small></button>
       <button class="nav btn" data-action="endless">Endless <small>best ${save.endless.best} m</small></button>
       <button class="nav btn" data-action="phone">Phone Controller <small class="phone-status">${phoneLabel}</small></button>
+      <button class="nav btn" data-action="hand">Hand Controller <small class="hand-status">${handLabel}</small></button>
       <button class="nav btn" data-action="help">How to Play</button>
       <button class="nav btn" data-action="settings">Settings</button>
     </nav>

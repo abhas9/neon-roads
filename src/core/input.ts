@@ -14,7 +14,10 @@ export class Input {
   /** Phone controller state, filled by RemoteHost each frame. */
   remote = { steer: 0, throttle: 0, jump: false, active: false };
   remoteSource: ((out: Input['remote']) => void) | null = null;
-  lastDevice: 'keyboard' | 'gamepad' | 'touch' | 'remote' = 'keyboard';
+  /** Hand-tracking state, filled by HandInput each frame. */
+  hand = { steer: 0, throttle: 0, jump: false, active: false };
+  handSource: ((out: Input['hand']) => void) | null = null;
+  lastDevice: 'keyboard' | 'gamepad' | 'touch' | 'remote' | 'hand' = 'keyboard';
 
   constructor() {
     window.addEventListener('keydown', (e) => {
@@ -26,6 +29,7 @@ export class Input {
         if (code === 'KeyR') this.fire('restart');
         if (code === 'Escape' || code === 'KeyP') this.fire('pause');
         if (code === 'KeyG') this.fire('ghost');
+        if (code === 'KeyC') this.fire('recentre');
         const menu: Record<string, MenuAction> = {
           ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
           KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right',
@@ -43,7 +47,7 @@ export class Input {
     });
   }
 
-  on(name: 'restart' | 'pause' | 'ghost' | 'any', fn: () => void): void {
+  on(name: 'restart' | 'pause' | 'ghost' | 'recentre' | 'any', fn: () => void): void {
     (this.listeners[name] ??= []).push(fn);
   }
 
@@ -52,7 +56,7 @@ export class Input {
   }
 
   /** Injects a discrete button from another device (phone controller). */
-  emit(name: 'restart' | 'pause' | 'ghost' | 'any' | MenuAction): void {
+  emit(name: 'restart' | 'pause' | 'ghost' | 'recentre' | 'any' | MenuAction): void {
     if (['up', 'down', 'left', 'right', 'confirm', 'back'].includes(name)) {
       for (const l of this.menuListeners) l(name as MenuAction);
       if (name === 'confirm') this.fire('any');
@@ -135,6 +139,20 @@ export class Input {
         if (Math.abs(this.remote.throttle) > 0.02) throttle = this.remote.throttle;
         jump = jump || this.remote.jump;
         if (this.remote.jump || Math.abs(this.remote.steer) > 0.02) this.lastDevice = 'remote';
+      }
+    }
+
+    // Hand tracking replaces the analog axes but only ever adds to jump: opening a hand is tens
+    // of milliseconds slower than a key press, so it is designed to be played alongside the
+    // keyboard rather than instead of it.
+    if (this.handSource) {
+      this.handSource(this.hand);
+      const h = this.hand;
+      if (h.active) {
+        if (Math.abs(h.steer) > 0.02) steer = h.steer;
+        if (Math.abs(h.throttle) > 0.02) throttle = h.throttle;
+        jump = jump || h.jump;
+        if (h.jump || Math.abs(h.steer) > 0.02) this.lastDevice = 'hand';
       }
     }
 
