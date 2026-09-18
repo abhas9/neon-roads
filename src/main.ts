@@ -12,7 +12,7 @@ import { Session, DEATH_TEXT } from './game/session';
 import type { RunConfig, RunResult } from './game/session';
 import { formatTime, medalFor } from './game/medals';
 import { copyToClipboard, gameUrl, postIntentUrl, postText, scorecard } from './game/share';
-import type { Score } from './game/share';
+import type { CameraControl, Score } from './game/share';
 import { InputTape } from './sim/replay';
 import { Hud } from './ui/hud';
 import { TouchControls } from './ui/touch';
@@ -20,11 +20,13 @@ import * as S from './ui/screens';
 import { RemoteHost } from './net/remoteHost';
 import { WandInput } from './wand/wandInput';
 import { WandScreen } from './ui/wand';
+import { HandInput } from './hand/handInput';
+import { HandScreen } from './ui/hand';
 import { Ev } from './sim/ship';
 import { V_MAX } from './sim/constants';
 import qrcode from 'qrcode-generator';
 
-type Screen = 'title' | 'worlds' | 'playing' | 'paused' | 'results' | 'settings' | 'help' | 'phone' | 'wand';
+type Screen = 'title' | 'worlds' | 'playing' | 'paused' | 'results' | 'settings' | 'help' | 'phone' | 'wand' | 'hand';
 
 const pars = PARS as Record<string, number>;
 
@@ -48,10 +50,12 @@ class App {
   private remote = new RemoteHost();
   private wand = new WandInput();
   private wandScreen: WandScreen;
-  /** True once the wand has been lost long enough to auto-pause; cleared when tracking returns. */
-  private wandPaused = false;
-  /** Whether the wand drove any part of the current run, for the shared scorecard. */
-  private wandRun = false;
+  private hand = new HandInput();
+  private handScreen: HandScreen;
+  /** True once a camera controller has been lost long enough to auto-pause; cleared on recovery. */
+  private camPaused = false;
+  /** Which camera controller drove any part of the current run, for the shared scorecard. */
+  private camRun: CameraControl | null = null;
   private hudPush = 0;
   private toastEl: HTMLElement;
   private lastScore: Score | null = null;
@@ -68,6 +72,8 @@ class App {
     this.session.onEnd = (r) => this.onRunEnd(r);
     this.wandScreen = new WandScreen(this.wand, () => this.settings, () => this.leaveWand());
     this.input.wandSource = (o) => this.wand.read(o);
+    this.handScreen = new HandScreen(this.hand, () => this.settings, () => this.leaveWand());
+    this.input.handSource = (o) => this.hand.read(o);
     // Restore a previous session's colour model, but never open the camera unasked.
     this.wand.load();
     this.toastEl = document.createElement('div');
@@ -90,6 +96,19 @@ class App {
         calibrated: !!this.wand.model,
       });
       this.test.ship = () => ({ x: this.session.ship.x, y: this.session.ship.y, z: this.session.ship.z, vz: this.session.ship.vz });
+      this.test.hand = () => ({
+        state: this.hand.state,
+        ready: this.hand.ready,
+        steer: this.hand.mapper.out.steer,
+        throttle: this.hand.mapper.out.throttle,
+        jump: this.hand.mapper.out.jump,
+        status: this.hand.mapper.status,
+        hands: this.hand.stats.hands,
+        fps: this.hand.stats.fps,
+        cost: this.hand.stats.cost,
+        model: this.hand.modelState,
+      });
+      this.test.stopHand = () => this.hand.stop();
     }
 
     this.applySettings();
@@ -136,6 +155,13 @@ class App {
     } catch {
       // Storage unavailable.
     }
+  }
+
+  private handLabel(): string {
+    if (this.hand.ready) return 'tracking';
+    if (this.hand.state === 'ready') return 'loading tracking…';
+    if (this.hand.state === 'denied') return 'camera blocked';
+    return 'fist and wave, nothing to hold';
   }
 
   private wandLabel(): string {
@@ -210,6 +236,7 @@ class App {
     });
     this.updateTouchVisibility();
     this.wandScreen.applyTuning();
+    this.handScreen.applyTuning();
   }
 
   private updateTouchVisibility(): void {
@@ -233,8 +260,8 @@ class App {
     });
     this.input.on('ghost', () => this.toggleGhost());
     this.input.on('recentre', () => {
-      if (this.wand.state !== 'ready') return;
-      this.toast(this.wand.recentre() ? '🪄 Neutral pose set' : 'Hold the wand up first');
+      if (this.hand.ready) this.toast(this.hand.recentre() ? '🖐 Neutral pose set' : 'Show both hands first');
+      else if (this.wand.state === 'ready') this.toast(this.wand.recentre() ? '🪄 Neutral pose set' : 'Hold the wand up first');
     });
     this.input.on('any', () => {
       if (this.screen === 'playing') this.session.skipDeath();
@@ -314,8 +341,28 @@ class App {
       case 'wand':
         this.show('wand');
         break;
+      case 'hand':
+        this.show('hand');
+        break;
       case 'wand-enable':
+        // Only one camera controller can own the webcam at a time.
+        this.hand.stop();
         void this.wandScreen.enable();
+        break;
+      case 'hand-enable':
+        this.wand.stop();
+        void this.handScreen.enable();
+        break;
+      case 'hand-recentre':
+        this.toast(this.hand.recentre() ? '🖐 Neutral pose set' : 'Show both hands first');
+        break;
+      case 'hand-done':
+        this.handScreen.done();
+        break;
+      case 'hand-off':
+        this.hand.stop();
+        this.handScreen.step = 'intro';
+        this.handScreen.render();
         break;
       case 'wand-calibrate':
         void this.wandScreen.calibrate();
@@ -354,7 +401,7 @@ class App {
         break;
       case 'back':
         if (this.screen === 'settings') this.show(this.settingsReturn === 'paused' ? 'paused' : this.settingsReturn);
-        else if (this.screen === 'phone' || this.screen === 'wand') this.show('title');
+        else if (this.screen === 'phone' || this.screen === 'wand' || this.screen === 'hand') this.show('title');
         else this.show('title');
         break;
       case 'road':
@@ -388,12 +435,18 @@ class App {
 
   private show(screen: Screen): void {
     if (this.screen === 'wand' && screen !== 'wand') this.wandScreen.unmount();
+    if (this.screen === 'hand' && screen !== 'hand') this.handScreen.unmount();
     this.screen = screen;
     let html = '';
     switch (screen) {
       case 'wand':
         this.screenEl.dataset.screen = screen;
         this.wandScreen.mount(this.screenEl);
+        this.focusFirst();
+        return;
+      case 'hand':
+        this.screenEl.dataset.screen = screen;
+        this.handScreen.mount(this.screenEl);
         this.focusFirst();
         return;
       case 'phone':
@@ -403,7 +456,7 @@ class App {
         this.renderPhone();
         return;
       case 'title':
-        html = S.titleScreen(this.save, this.dailyLabel(), this.phoneLabel(), this.wandLabel());
+        html = S.titleScreen(this.save, this.dailyLabel(), this.phoneLabel(), this.wandLabel(), this.handLabel());
         this.audio.playMusic(10, 0.3);
         break;
       case 'worlds':
@@ -573,7 +626,7 @@ class App {
   }
 
   private beginRun(cfg: RunConfig, music: number): void {
-    this.wandRun = false;
+    this.camRun = null;
     this.session.start(cfg);
     this.view.setGhostLabel(cfg.ghost ? (cfg.ghostTime ? `BEST ${formatTime(cfg.ghostTime)}` : cfg.bestDistance ? `BEST ${cfg.bestDistance} m` : 'BEST RUN') : null);
     this.audio.playMusic(music, 0.5);
@@ -655,24 +708,30 @@ class App {
   }
 
   /**
-   * Auto-pauses when the camera loses the wand. Without this, reaching for a drink mid-run means
-   * the ship keeps its last heading into a wall, and campaign mode restarts instantly, over and
-   * over. Only fires once per loss so resuming by keyboard is not immediately undone.
+   * Auto-pauses when a camera controller loses the player. Without this, reaching for a drink
+   * mid-run means the ship keeps its last heading into a wall, and campaign mode restarts
+   * instantly, over and over. Only fires once per loss so resuming by keyboard is not undone.
    */
-  private watchWand(): void {
-    if (this.wand.state !== 'ready' || !this.wand.model) {
-      this.hud.setWand('off');
+  private watchCameras(): void {
+    const active =
+      this.wand.state === 'ready' && this.wand.model
+        ? { status: this.wand.mapper.status, label: 'WAND' }
+        : this.hand.ready
+          ? { status: this.hand.mapper.status, label: 'HANDS' }
+          : null;
+    if (!active) {
+      this.hud.setCamera('off');
+      this.camPaused = false;
       return;
     }
-    this.hud.setWand(this.wand.mapper.status);
-    const lost = this.wand.mapper.status === 'lost';
-    if (!lost) {
-      this.wandPaused = false;
+    this.hud.setCamera(active.status, active.label);
+    if (active.status !== 'lost') {
+      this.camPaused = false;
       return;
     }
-    if (this.wandPaused || this.screen !== 'playing' || !this.session.running) return;
-    this.wandPaused = true;
-    this.toast('🪄 Wand out of view — paused');
+    if (this.camPaused || this.screen !== 'playing' || !this.session.running) return;
+    this.camPaused = true;
+    this.toast(active.label === 'HANDS' ? '🖐 Hands out of view — paused' : '🪄 Wand out of view — paused');
     this.togglePause();
   }
 
@@ -724,7 +783,7 @@ class App {
         attempts: this.session.attempts,
         newRecord: newRecord && !!prevBest,
         assist: r.assist,
-        wand: this.wandRun,
+        control: this.camRun ?? undefined,
       };
       // The session keeps rendering the fly-out and fireworks behind the results panel.
       this.showHtml(
@@ -774,7 +833,7 @@ class App {
       }
       this.persist();
       const [title, sub] = r.cause ? DEATH_TEXT[r.cause] : ['RUN OVER', ''];
-      this.lastScore = { kind: 'distance', daily, label: c.label, distance: r.distance, best, time: r.time, newRecord, endedBy: title, wand: this.wandRun };
+      this.lastScore = { kind: 'distance', daily, label: c.label, distance: r.distance, best, time: r.time, newRecord, endedBy: title, control: this.camRun ?? undefined };
       this.leaveRun();
       this.showHtml(S.endlessResults({ daily, label: c.label, distance: r.distance, best, newRecord, cause: title, sub, time: r.time }), 'results');
     }
@@ -784,10 +843,12 @@ class App {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const inRun = this.screen === 'playing' || this.screen === 'paused' || (this.screen === 'settings' && this.settingsReturn === 'paused');
-    this.watchWand();
+    this.watchCameras();
     if ((inRun || (this.screen === 'results' && this.session.celebrating)) && this.session.cfg) {
       this.session.update(dt);
-      if (this.input.wand.active && (Math.abs(this.input.wand.steer) > 0.02 || this.input.wand.jump)) this.wandRun = true;
+      const used = (d: { active: boolean; steer: number; jump: boolean }) => d.active && (Math.abs(d.steer) > 0.02 || d.jump);
+      if (used(this.input.wand)) this.camRun = 'wand';
+      else if (used(this.input.hand)) this.camRun = 'hands';
       this.hudPush -= dt;
       if (this.remote.count && this.hudPush <= 0) {
         this.hudPush = 0.2;
@@ -815,6 +876,10 @@ interface NeonTestHook {
   wand?: () => { state: string; steer: number; throttle: number; jump: boolean; status: string; lock: number; fps: number; cost: number; calibrated: boolean };
   /** Ship position, so a test can prove input actually reached the simulation. */
   ship?: () => { x: number; y: number; z: number; vz: number };
+  /** Live hand tracking and mapping state, for the hand end-to-end check. */
+  hand?: () => { state: string; ready: boolean; steer: number; throttle: number; jump: boolean; status: string; hands: number; fps: number; cost: number; model: string };
+  /** Switches hand tracking off mid-run, so a benchmark can measure the frame rate without it. */
+  stopHand?: () => void;
 }
 
 new App();

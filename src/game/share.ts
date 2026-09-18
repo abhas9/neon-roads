@@ -9,6 +9,15 @@ export function gameUrl(loc: { hostname: string; origin: string; pathname: strin
   return `${loc.origin}${loc.pathname.replace(/[^/]*$/, '')}`;
 }
 
+/** Camera-based controllers, tagged on a shared scorecard. */
+export type CameraControl = 'wand' | 'hands';
+
+const CONTROL_ROW: Record<CameraControl, string> = { wand: 'CAMERA WAND', hands: 'HAND TRACKING' };
+const CONTROL_POST: Record<CameraControl, string> = {
+  wand: '🪄 Flown with a paper wand and a webcam',
+  hands: '🖐 Flown with bare hands and a webcam',
+};
+
 export interface RoadScore {
   kind: 'road';
   roadCode: string;
@@ -26,8 +35,8 @@ export interface RoadScore {
   attempts: number;
   newRecord: boolean;
   assist: boolean;
-  /** Run was driven, at least partly, by the camera wand. */
-  wand?: boolean;
+  /** Camera controller the run was driven by, at least partly. */
+  control?: CameraControl;
 }
 
 export interface DistanceScore {
@@ -39,8 +48,8 @@ export interface DistanceScore {
   time: number;
   newRecord: boolean;
   endedBy: string;
-  /** Run was driven, at least partly, by the camera wand. */
-  wand?: boolean;
+  /** Camera controller the run was driven by, at least partly. */
+  control?: CameraControl;
 }
 
 export type Score = RoadScore | DistanceScore;
@@ -101,7 +110,7 @@ export function scorecard(score: Score, url: string): string {
       row(`ENDED BY   ${score.endedBy}`),
     );
   }
-  if (score.wand) lines.push(row('CONTROL    CAMERA WAND'));
+  if (score.control) lines.push(row(`CONTROL    ${CONTROL_ROW[score.control]}`));
   if (score.newRecord) lines.push(rule(), row('*** NEW PERSONAL BEST ***'));
   lines.push(rule(), `  Race me: ${url}`);
   return lines.join('\n');
@@ -120,7 +129,7 @@ export function postText(score: Score): string {
       `💨 O₂   ${postBar(score.oxygen)} ${pct(score.oxygen)}`,
       `🚀 Top speed ${Math.round(score.topSpeed)} · ${score.jumps} jumps`,
       ...(score.newRecord ? ['🏆 New personal best!'] : []),
-      ...(score.wand ? ['🪄 Flown with a paper wand and a webcam'] : []),
+      ...(score.control ? [CONTROL_POST[score.control]] : []),
       '',
       'Can you beat my time?',
     ].join('\n');
@@ -131,7 +140,7 @@ export function postText(score: Score): string {
     `📏 ${score.distance.toLocaleString('en-US')} m${score.newRecord ? ' · 🏆 new best' : ` · best ${score.best.toLocaleString('en-US')} m`}`,
     `⏱ Survived ${formatTime(score.time)}`,
     `💥 ${score.endedBy}`,
-    ...(score.wand ? ['🪄 Flown with a paper wand and a webcam'] : []),
+    ...(score.control ? [CONTROL_POST[score.control]] : []),
     '',
     'How far can you go?',
   ].join('\n');

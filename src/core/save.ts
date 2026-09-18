@@ -14,6 +14,15 @@ export interface Settings {
   /** Upward flick speed that fires a jump. */
   wandFlick: number;
   wandInvert: boolean;
+  /** Hand travel, as a fraction of frame height, for full steering and throttle. */
+  handSteerRange: number;
+  handThrottleRange: number;
+  /** Openness below which the jumping hand counts as a fist. */
+  handFist: number;
+  /** Swap which hand flies and which jumps. */
+  handSwap: boolean;
+  /** joystick: one hand steers and throttles. split: one steers, the other throttles. */
+  handMode: 'joystick' | 'split';
 }
 
 export interface RoadRecord {
@@ -50,6 +59,11 @@ export const DEFAULT_SETTINGS: Settings = {
   wandThrottle: 0.22,
   wandFlick: 1.8,
   wandInvert: false,
+  handSteerRange: 0.16,
+  handThrottleRange: 0.14,
+  handFist: 0.35,
+  handSwap: false,
+  handMode: 'joystick',
 };
 
 export function loadSave(): SaveData {

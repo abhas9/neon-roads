@@ -17,7 +17,10 @@ export class Input {
   /** Camera wand state, filled by WandInput each frame. */
   wand = { steer: 0, throttle: 0, jump: false, active: false };
   wandSource: ((out: Input['wand']) => void) | null = null;
-  lastDevice: 'keyboard' | 'gamepad' | 'touch' | 'remote' | 'wand' = 'keyboard';
+  /** Hand-tracking state, filled by HandInput each frame. */
+  hand = { steer: 0, throttle: 0, jump: false, active: false };
+  handSource: ((out: Input['hand']) => void) | null = null;
+  lastDevice: 'keyboard' | 'gamepad' | 'touch' | 'remote' | 'wand' | 'hand' = 'keyboard';
 
   constructor() {
     window.addEventListener('keydown', (e) => {
@@ -142,16 +145,23 @@ export class Input {
       }
     }
 
+    // Camera controllers replace the analog axes but only ever add to jump: their gestures are
+    // tens of milliseconds slower than a key, so they are designed to be played alongside the
+    // keyboard rather than instead of it.
+    const analog = (s: { steer: number; throttle: number; jump: boolean; active: boolean }, device: Input['lastDevice']) => {
+      if (!s.active) return;
+      if (Math.abs(s.steer) > 0.02) steer = s.steer;
+      if (Math.abs(s.throttle) > 0.02) throttle = s.throttle;
+      jump = jump || s.jump;
+      if (s.jump || Math.abs(s.steer) > 0.02) this.lastDevice = device;
+    };
     if (this.wandSource) {
       this.wandSource(this.wand);
-      if (this.wand.active) {
-        if (Math.abs(this.wand.steer) > 0.02) steer = this.wand.steer;
-        if (Math.abs(this.wand.throttle) > 0.02) throttle = this.wand.throttle;
-        // Jump is OR'd rather than replaced: a flick is ~100ms slower than a key, so the wand is
-        // designed to be played alongside the keyboard rather than instead of it.
-        jump = jump || this.wand.jump;
-        if (this.wand.jump || Math.abs(this.wand.steer) > 0.02) this.lastDevice = 'wand';
-      }
+      analog(this.wand, 'wand');
+    }
+    if (this.handSource) {
+      this.handSource(this.hand);
+      analog(this.hand, 'hand');
     }
 
     if (this.touch.active) {

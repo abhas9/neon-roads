@@ -24,7 +24,9 @@
   ],
   "type": "module",
   "scripts": {
+    "predev": "node tools/fetch-mediapipe.mjs",
     "dev": "vite",
+    "prebuild": "node tools/fetch-mediapipe.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -36,7 +38,10 @@
     "check:gpu": "node tools/gpu-check.mjs /tmp",
     "e2e:celebrate": "vite-node tools/solve-tape.ts w1r1 /tmp/neon-w1r1-tape.json && node tools/celebration-e2e.mjs http://127.0.0.1:5287/ /tmp/neon-w1r1-tape.json",
     "audit:contrast": "vite-node tools/solve-tape.ts w1r1 /tmp/neon-w1r1-tape.json && node tools/contrast-audit.mjs http://127.0.0.1:5287/ /tmp/neon-w1r1-tape.json",
-    "e2e:wand": "PW_CHANNEL=chrome node tools/wand-e2e.mjs http://127.0.0.1:5287/"
+    "e2e:wand": "PW_CHANNEL=chrome node tools/wand-e2e.mjs http://127.0.0.1:5287/",
+    "mediapipe": "node tools/fetch-mediapipe.mjs",
+    "e2e:hand": "PW_CHANNEL=chrome node tools/hand-e2e.mjs http://127.0.0.1:5287/",
+    "perf:hand": "node tools/hand-perf.mjs http://127.0.0.1:5287/"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",

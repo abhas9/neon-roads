@@ -151,7 +151,7 @@ await page.waitForSelector('.worlds-screen');
 await page.click('[data-action=road]');
 await page.waitForFunction(() => document.querySelector('.hud-timer')?.textContent !== '00:00.00', null, { timeout: 15000 });
 check((await screen()) === 'playing', 'road started');
-check(await page.isVisible('.chip.wand-chip'), 'HUD shows the wand chip');
+check(await page.isVisible('.chip.cam-chip'), 'HUD shows the wand chip');
 
 // Push forward: this game only accelerates under throttle, so a level wand stays parked.
 await setPose({ half: 0.185 });
