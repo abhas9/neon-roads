@@ -285,6 +285,8 @@ Print a two-colour marker, tape it to a pen, and fly the ship by waving it at yo
 - **Cheap.** Tracking runs at 160x120 and costs about **0.4 ms per frame**, so it sits comfortably beside the bloom pipeline.
 - **Safe when it loses you.** Controls fade to neutral within 200 ms, and the run auto-pauses after half a second. Without that, reaching for a drink means the ship holds its heading into a wall — and campaign mode restarts instantly, over and over.
 
+> Building something similar? [`docs/SMART-CONTROLLERS.md`](docs/SMART-CONTROLLERS.md) is the playbook this was built to: signal selection, latency budgeting, runtime calibration, testing a camera controller without a camera, and the bugs to check for by name.
+
 ### What it is good at, and what it is not
 
 Camera control costs roughly **100 ms of jump latency** you do not pay with a key: a webcam frame is already tens of milliseconds old when it arrives, and a flick must be seen before it can be recognised. At full speed a road row passes every 48 ms, so late worlds with tight jump timing are genuinely harder this way.
@@ -348,7 +350,7 @@ src/
   audio/        Synthesized sound effects and the procedural music sequencer
 tests/          Vitest unit tests
 tools/          Solver scripts and Playwright checks (screenshots, real-GPU render check, phone and wand end-to-end, contrast audit, synthetic webcam)
-docs/           Design research and plan, screenshots
+docs/           Design research and plan, the smart-controller playbook, screenshots
 ```
 
 ## Authoring roads
