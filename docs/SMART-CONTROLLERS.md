@@ -56,6 +56,18 @@ For each control the game needs, ask:
    Depth from a single blob's area is the worst signal in the set: it swings with partial
    occlusion and with any tilt away from the camera. Two tracked points instead of one upgraded
    depth *and* handed us tilt for free.
+
+   **Prefer a relation between two points over either point's position.** This came up twice,
+   independently, and both times it was the decision that made the controller feel solid. The
+   wand steers on the angle between its two discs; the hand controller steers on the angle
+   between the two palms. A relation is *self-correcting*: shift in your seat, lean, or let your
+   arm wander, and both points move together so the control does not budge. Absolute position has
+   no such property — it drifts, and the calibrated neutral silently goes stale. If your scheme
+   has two trackable points, steer on the relation between them.
+
+   Two axes taken as the **difference** and the **mean** of the same pair of points are
+   independent by construction, so they cannot bleed into each other. That is worth designing
+   towards, and worth a test that says so.
 3. **How tiring is it?** Continuous full-arm motion is exhausting within a minute. Wrist motion
    is not. Tilt-to-steer was chosen over move-to-steer mostly for this, and it has a second
    benefit: a stick has a **physical detent** — you can feel level and return to neutral without
@@ -330,6 +342,15 @@ Every one of these was a real defect in this build. They are generic to the patt
 - **Default canvas size.** A fresh `<canvas>` is 300×150, not 0×0. Using it as a "have we seen a
   frame yet" signal silently computes regions against the wrong dimensions.
 
+**Gesture state machines**
+- **Arm on a state, not on a transition.** A jump gesture that arms when the hand goes
+  open-to-closed never arms at all if the *resting* posture is already closed — the transition
+  never happens, and the controller simply cannot jump. Arm on "is currently closed". A unit test
+  caught this; nothing else would have until playtest.
+- **Decide what a partial signal means.** With one hand visible, an angle between two hands has no
+  value at all. Freezing the last reading is the wrong answer; fade that axis out, leave the
+  others alone, and say so on screen.
+
 **Camera settings**
 - Locking **exposure** can pin a dim room too dark to track. Lock **white balance** — that is the
   setting that actually moves calibrated colours — and leave exposure automatic.
@@ -462,6 +483,21 @@ quoted above, and it is the only thing verifying the build-time asset staging.
 - **The gesture threshold is not knowable in advance.** Hands differ. Ship a live openness bar
   with the threshold marked on it and a slider, so the player can see and set where their own
   fist crosses the line. Guessing a constant would have been wrong for somebody.
+
+### Simplifying means deleting, not adding a mode
+
+The first hand mapping had a joystick hand and a button hand, plus a *Split hands* alternative and
+a *Left-handed* swap. It tested green and it worked — and it was too complicated to remember. The
+replacement is a single symmetric scheme: grip an invisible wheel, turn to steer, raise or lower
+to change speed, open a hand to jump.
+
+The temptation when a user says "this is complicated" is to add their idea as another option.
+That makes it worse. The symmetric scheme also made *Left-handed* meaningless, so three settings
+became zero. If a redesign does not let you delete something, it probably has not simplified
+anything.
+
+A real-world metaphor is worth more than any amount of tuning: "hold a steering wheel" needs no
+explanation at all, and the instructions shrank to three lines.
 
 ### Fairness is a design constraint, not a nicety
 

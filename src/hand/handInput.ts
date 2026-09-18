@@ -30,7 +30,7 @@ export interface HandStats {
   /** Landmark detection plus mapping, in milliseconds per frame. */
   cost: number;
   latency: number;
-  /** Fraction of recent frames in which the flying hand was found. */
+  /** Fraction of recent frames in which both hands were found. */
   lockRate: number;
   hands: number;
 }
@@ -219,7 +219,7 @@ export class HandInput {
     this.mapper.update(this.pair, dt);
     this.stats.hands = observations.length;
 
-    const locked = this.mapper.raw.fly ? 1 : 0;
+    const locked = this.mapper.raw.hands === 2 ? 1 : 0;
     this.lockSum += locked - this.lockHist[this.lockAt];
     this.lockHist[this.lockAt] = locked;
     this.lockAt = (this.lockAt + 1) % LOCK_WINDOW;

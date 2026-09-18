@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { HandAssigner, fingerExtension, handScale, openness, palmCentre, readHand } from '../src/hand/gestures';
 import type { HandObservation, Landmark } from '../src/hand/gestures';
-import { DEFAULT_HAND_TUNING, HandMapper } from '../src/hand/mapping';
+import { DEFAULT_HAND_TUNING, HandMapper, wheelAngle } from '../src/hand/mapping';
 import type { HandPair } from '../src/hand/gestures';
 
 const ASPECT = 4 / 3;
@@ -183,28 +183,49 @@ describe('hand assignment', () => {
   });
 });
 
-describe('hand mapper', () => {
+describe('steering wheel mapper', () => {
   const dt = 1 / 30;
   const assigner = new HandAssigner();
+  /** Both hands gripped closed, as they are held at rest. */
+  const GRIP = 1;
+
   const pair = (r: HandOpts | null, l: HandOpts | null): HandPair =>
-    assigner.assign([...(r ? [rightHand(r)] : []), ...(l ? [leftHand(l)] : [])], ASPECT);
+    assigner.assign(
+      [...(r ? [rightHand({ curl: GRIP, ...r })] : []), ...(l ? [leftHand({ curl: GRIP, ...l })] : [])],
+      ASPECT,
+    );
+  const level = () => pair({}, {});
+  /**
+   * Turning the wheel clockwise drops the right hand and raises the left. The hands sit 0.44
+   * apart horizontally, so the vertical offset is a tangent, not a sine, if the resulting angle
+   * is to match the one asked for.
+   */
+  const turn = (radians: number) => pair({ y: -Math.tan(radians) * 0.22 }, { y: Math.tan(radians) * 0.22 });
 
-  const neutralPair = () => pair({}, {});
-
-  function settle(m: HandMapper, p: HandPair, frames = 30) {
+  function settle(m: HandMapper, p: HandPair, frames = 40) {
     for (let i = 0; i < frames; i++) m.update(p, dt);
   }
 
-  function fresh(tuning = {}) {
+  function fresh() {
     const m = new HandMapper();
-    m.setTuning(tuning);
-    settle(m, neutralPair(), 5);
-    m.recentre(neutralPair());
-    settle(m, neutralPair(), 10);
+    settle(m, level(), 10);
+    m.recentre(level());
+    settle(m, level(), 10);
     return m;
   }
 
-  it('is neutral with both hands open and still', () => {
+  function edges(m: HandMapper, frames: () => HandPair, n: number) {
+    let count = 0;
+    let was = m.out.jump;
+    for (let i = 0; i < n; i++) {
+      m.update(frames(), dt);
+      if (m.out.jump && !was) count++;
+      was = m.out.jump;
+    }
+    return count;
+  }
+
+  it('is neutral with both hands gripped and level', () => {
     const m = fresh();
     expect(m.out.steer).toBe(0);
     expect(m.out.throttle).toBe(0);
@@ -212,101 +233,119 @@ describe('hand mapper', () => {
     expect(m.status).toBe('tracking');
   });
 
-  it('steers right when the flying hand moves right', () => {
+  it('steers right when the wheel turns clockwise', () => {
     const m = fresh();
-    // Moving right in the mirror means moving left in the raw image.
-    settle(m, pair({ x: -0.22 - DEFAULT_HAND_TUNING.steerRange }, {}), 40);
+    settle(m, turn(DEFAULT_HAND_TUNING.steerRange));
     expect(m.out.steer).toBeCloseTo(1, 1);
   });
 
-  it('steers left when the flying hand moves left', () => {
+  it('steers left when the wheel turns anticlockwise', () => {
     const m = fresh();
-    settle(m, pair({ x: -0.22 + DEFAULT_HAND_TUNING.steerRange }, {}), 40);
+    settle(m, turn(-DEFAULT_HAND_TUNING.steerRange));
     expect(m.out.steer).toBeCloseTo(-1, 1);
   });
 
-  it('accelerates when the flying hand rises and brakes when it drops', () => {
+  it('accelerates when both hands rise and brakes when both drop', () => {
     const up = fresh();
-    settle(up, pair({ y: DEFAULT_HAND_TUNING.throttleRange }, {}), 40);
+    settle(up, pair({ y: DEFAULT_HAND_TUNING.throttleRange }, { y: DEFAULT_HAND_TUNING.throttleRange }));
     expect(up.out.throttle).toBeCloseTo(1, 1);
 
     const down = fresh();
-    settle(down, pair({ y: -DEFAULT_HAND_TUNING.throttleRange }, {}), 40);
+    settle(down, pair({ y: -DEFAULT_HAND_TUNING.throttleRange }, { y: -DEFAULT_HAND_TUNING.throttleRange }));
     expect(down.out.throttle).toBeCloseTo(-1, 1);
   });
 
-  it('jumps when the other hand makes a fist', () => {
+  it('keeps the steering still when the whole body shifts', () => {
+    // The point of measuring between the hands rather than from one: leaning or sliding in a
+    // chair moves both hands together and must not read as a turn.
     const m = fresh();
-    expect(m.out.jump).toBe(false);
-    settle(m, pair({}, { curl: 1 }), 3);
-    expect(m.out.jump).toBe(true);
-  });
-
-  it('holds one jump for as long as the fist is held', () => {
-    // The simulation edge-triggers, so a steady true is exactly one jump; a flicker is two.
-    const m = fresh();
-    let edges = 0;
-    let was = false;
-    for (let i = 0; i < 40; i++) {
-      m.update(pair({}, { curl: 1 }), dt);
-      if (m.out.jump && !was) edges++;
-      was = m.out.jump;
+    for (const [dx, dy] of [[0.12, 0], [-0.12, 0], [0, 0.08], [0.1, -0.08]]) {
+      settle(m, pair({ x: -0.22 + dx, y: dy }, { x: 0.22 + dx, y: dy }));
+      expect(Math.abs(m.out.steer), `shifted by ${dx}, ${dy}`).toBeLessThan(0.05);
     }
-    expect(edges).toBe(1);
   });
 
-  it('releases the jump when the hand opens again', () => {
+  it('does not change the throttle while steering', () => {
+    // Steering is the difference in hand height and throttle is their mean, so the two axes are
+    // independent by construction. This is the test that says so.
     const m = fresh();
-    settle(m, pair({}, { curl: 1 }), 5);
-    expect(m.out.jump).toBe(true);
-    settle(m, pair({}, { curl: 0 }), 5);
-    expect(m.out.jump).toBe(false);
+    settle(m, turn(DEFAULT_HAND_TUNING.steerRange));
+    expect(Math.abs(m.out.steer)).toBeGreaterThan(0.5);
+    expect(Math.abs(m.out.throttle)).toBeLessThan(0.1);
   });
 
-  it('does not chatter when a hand hovers at the fist threshold', () => {
+  it('does not change the steering while throttling', () => {
     const m = fresh();
-    let edges = 0;
-    let was = false;
-    // Openness wobbling either side of the threshold; hysteresis must absorb it.
-    for (let i = 0; i < 60; i++) {
-      m.update(pair({}, { curl: 0.62 + (i % 2) * 0.04 }), dt);
-      if (m.out.jump && !was) edges++;
-      was = m.out.jump;
-    }
-    expect(edges).toBeLessThanOrEqual(1);
-  });
-
-  it('does not read one fist as two jumps when a frame drops', () => {
-    const m = fresh();
-    let edges = 0;
-    let was = false;
-    for (let i = 0; i < 30; i++) {
-      // The jumping hand vanishes for a single frame in the middle of the fist.
-      m.update(i === 10 ? pair({}, null) : pair({}, { curl: 1 }), dt);
-      if (m.out.jump && !was) edges++;
-      was = m.out.jump;
-    }
-    expect(edges).toBe(1);
-  });
-
-  it('releases a held fist once the hand has been gone too long', () => {
-    const m = fresh();
-    settle(m, pair({}, { curl: 1 }), 5);
-    expect(m.out.jump).toBe(true);
-    settle(m, pair({}, null), 12);
-    expect(m.out.jump).toBe(false);
-  });
-
-  it('does not move the steering when the flying hand closes', () => {
-    // Cross-talk check: the palm centre must not drift as the fingers curl.
-    const m = fresh();
-    settle(m, pair({ curl: 1 }, {}), 30);
+    settle(m, pair({ y: DEFAULT_HAND_TUNING.throttleRange }, { y: DEFAULT_HAND_TUNING.throttleRange }));
+    expect(Math.abs(m.out.throttle)).toBeGreaterThan(0.5);
     expect(Math.abs(m.out.steer)).toBeLessThan(0.05);
   });
 
-  it('fades the controls out and flags a loss when both hands disappear', () => {
+  it('jumps when either hand opens', () => {
+    for (const side of ['left', 'right'] as const) {
+      const m = fresh();
+      expect(m.out.jump).toBe(false);
+      settle(m, side === 'left' ? pair({}, { curl: 0 }) : pair({ curl: 0 }, {}), 4);
+      expect(m.out.jump, `${side} hand`).toBe(true);
+    }
+  });
+
+  it('does not jump from hands that simply start open', () => {
+    // Hands are open before the player grips the wheel; that must not fire a jump.
+    const m = new HandMapper();
+    expect(edges(m, () => pair({ curl: 0 }, { curl: 0 }), 20)).toBe(0);
+  });
+
+  it('holds one jump for as long as the hand stays open', () => {
     const m = fresh();
-    settle(m, pair({ x: -0.22 - 0.2 }, {}), 30);
+    expect(edges(m, () => pair({}, { curl: 0 }), 40)).toBe(1);
+  });
+
+  it('counts opening both hands at once as a single jump', () => {
+    const m = fresh();
+    expect(edges(m, () => pair({ curl: 0 }, { curl: 0 }), 40)).toBe(1);
+  });
+
+  it('allows a second jump after the hand closes again', () => {
+    const m = fresh();
+    let count = 0;
+    let was = false;
+    const script = [...Array(6).fill(0), ...Array(8).fill(1), ...Array(6).fill(0), ...Array(8).fill(1)];
+    for (const open of script) {
+      m.update(pair({}, { curl: open ? 0 : GRIP }), dt);
+      if (m.out.jump && !was) count++;
+      was = m.out.jump;
+    }
+    expect(count).toBe(2);
+  });
+
+  it('does not read one open hand as two jumps when a frame drops', () => {
+    const m = fresh();
+    let count = 0;
+    let was = false;
+    for (let i = 0; i < 30; i++) {
+      m.update(i === 10 ? pair({}, null) : pair({}, { curl: 0 }), dt);
+      if (m.out.jump && !was) count++;
+      was = m.out.jump;
+    }
+    expect(count).toBe(1);
+  });
+
+  it('lets go of the steering when one hand leaves, and keeps the throttle', () => {
+    const m = fresh();
+    settle(m, turn(DEFAULT_HAND_TUNING.steerRange));
+    settle(m, pair({ y: DEFAULT_HAND_TUNING.throttleRange }, { y: DEFAULT_HAND_TUNING.throttleRange }));
+    const throttle = m.out.throttle;
+    expect(Math.abs(throttle)).toBeGreaterThan(0.5);
+    for (let i = 0; i < 10; i++) m.update(pair({ y: DEFAULT_HAND_TUNING.throttleRange }, null), dt);
+    expect(m.out.steer, 'steering has no meaning with one hand').toBe(0);
+    expect(m.out.throttle, 'throttle is left where the player set it').toBeCloseTo(throttle, 2);
+    expect(m.status).toBe('tracking');
+  });
+
+  it('fades everything and flags a loss when both hands disappear', () => {
+    const m = fresh();
+    settle(m, turn(DEFAULT_HAND_TUNING.steerRange));
     expect(Math.abs(m.out.steer)).toBeGreaterThan(0.5);
     for (let i = 0; i < 7; i++) m.update(pair(null, null), dt);
     expect(m.out.steer).toBe(0);
@@ -315,55 +354,39 @@ describe('hand mapper', () => {
     expect(m.status).toBe('lost');
   });
 
-  it('forgets a stale neutral on reset, so a new session re-zeroes', () => {
-    const m = new HandMapper();
-    // Calibrated with the hand held well off to one side.
-    settle(m, pair({ x: -0.40 }, {}), 20);
-    expect(Math.abs(m.out.steer)).toBeLessThan(0.05);
-    m.reset();
-    // Coming back with the hand in the middle must read as neutral, not as a hard turn.
-    settle(m, neutralPair(), 20);
-    expect(Math.abs(m.out.steer)).toBeLessThan(0.05);
-  });
-
   it('recovers when the hands come back', () => {
     const m = fresh();
     for (let i = 0; i < 30; i++) m.update(pair(null, null), dt);
     expect(m.status).toBe('lost');
-    settle(m, neutralPair(), 5);
+    settle(m, level(), 5);
     expect(m.status).toBe('tracking');
     expect(m.active).toBe(true);
   });
 
-  it('ignores a hand too far away to read', () => {
+  it('ignores hands too far away to read', () => {
     const m = fresh();
-    settle(m, pair({ scale: 0.01 }, { scale: 0.01, curl: 1 }), 20);
-    expect(m.out.jump).toBe(false);
+    settle(m, pair({ scale: 0.01 }, { scale: 0.01 }), 20);
     expect(m.status).toBe('lost');
   });
 
-  it('swaps the hands for left-handed players', () => {
-    const m = fresh({ swapHands: true });
-    settle(m, pair({ curl: 1 }, {}), 5);
-    expect(m.out.jump, 'the right hand now jumps').toBe(true);
-    const s = fresh({ swapHands: true });
-    settle(s, pair({}, { x: 0.22 - DEFAULT_HAND_TUNING.steerRange }), 40);
-    expect(s.out.steer, 'the left hand now steers').toBeCloseTo(1, 1);
+  it('treats level hands as straight ahead without any calibration', () => {
+    // No recentre at all: the wheel has a natural zero, unlike a hand's resting height.
+    const m = new HandMapper();
+    settle(m, level(), 20);
+    expect(Math.abs(m.out.steer)).toBeLessThan(0.05);
   });
 
-  it('takes throttle from the other hand in split mode', () => {
-    const m = fresh({ mode: 'split' });
-    // Raising only the flying hand must not throttle in this mode.
-    settle(m, pair({ y: DEFAULT_HAND_TUNING.throttleRange }, {}), 30);
-    expect(Math.abs(m.out.throttle)).toBeLessThan(0.2);
-    const t = fresh({ mode: 'split' });
-    settle(t, pair({}, { y: DEFAULT_HAND_TUNING.throttleRange }), 40);
-    expect(t.out.throttle).toBeCloseTo(1, 1);
+  it('forgets a stale neutral on reset', () => {
+    const m = new HandMapper();
+    settle(m, pair({ y: 0.2 }, { y: 0.2 }), 20);
+    expect(Math.abs(m.out.throttle)).toBeLessThan(0.1);
+    m.reset();
+    settle(m, level(), 20);
+    expect(Math.abs(m.out.throttle)).toBeLessThan(0.1);
   });
 
-  it('still steers in split mode', () => {
-    const m = fresh({ mode: 'split' });
-    settle(m, pair({ x: -0.22 - DEFAULT_HAND_TUNING.steerRange }, {}), 40);
-    expect(m.out.steer).toBeCloseTo(1, 1);
+  it('measures the wheel angle as zero when the hands are level', () => {
+    const p = level();
+    expect(wheelAngle(p.left!, p.right!)).toBeCloseTo(0, 2);
   });
 });

@@ -186,7 +186,8 @@ if (tapeInfo) {
   await page.waitForSelector('.hand-screen');
   await page.click('[data-action=hand-enable]');
   await page.waitForSelector('[data-action=hand-recentre]', { timeout: 20000 });
-  await page.evaluate(() => window.__hands.set({ right: { x: -0.33, y: 0.09 }, left: { curl: 1 } }));
+  // Both hands gripping the wheel, turned slightly, with the left hand open mid-jump.
+  await page.evaluate(() => window.__hands.set({ right: { x: -0.24, y: -0.07, curl: 1 }, left: { x: 0.24, y: 0.07, curl: 0 } }));
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${out}/hand-tuning.jpg`, ...jpeg });
   await ctx.close();

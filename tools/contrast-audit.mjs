@@ -182,6 +182,7 @@ const desktop = async (roads = progress, extraInit = null, settings = {}) => {
   await page.goto(base);
   await page.waitForTimeout(1200);
   await page.evaluate(() => window.__wand.set({ visible: false }));
+  await page.evaluate(() => window.__hands.set({ right: { y: -0.06, curl: 1 }, left: { y: 0.06, curl: 1 } }));
   await page.click('[data-action=hand]');
   await page.waitForSelector('.hand-screen');
   await audit(page, 'Hand intro');

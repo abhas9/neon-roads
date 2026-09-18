@@ -1,38 +1,45 @@
-/** Turns a pair of hand readings into a game InputFrame. Pure and DOM-free, so it unit-tests. */
+/**
+ * Turns a pair of hand readings into a game InputFrame: an invisible steering wheel.
+ *
+ * Both hands are held closed, as if gripping a wheel. Steering comes from the *angle between the
+ * palms* rather than either hand's position, which makes it self-correcting: shift in your seat
+ * and both hands move together, so the steering does not budge. Throttle comes from their mean
+ * height, which is mathematically independent of that angle — tilt without changing the mean, or
+ * raise both without tilting. Opening either hand jumps.
+ *
+ * Pure and DOM-free, so all of it unit-tests against synthetic skeletons.
+ */
 import type { InputFrame } from '../sim/types';
-import { OneEuro, shapeAxis } from '../core/filter';
+import { OneEuro, shapeAxis, wrapPi } from '../core/filter';
 import type { HandPair, HandReading } from './gestures';
 
-export type HandMode = 'joystick' | 'split';
-
 export interface HandTuning {
-  /** Hand travel, as a fraction of frame height, that produces full steering. */
+  /** Wheel tilt, in radians, that produces full steering. */
   steerRange: number;
+  /** Hand travel, as a fraction of frame height, that produces full throttle. */
   throttleRange: number;
-  /** Openness below this counts as a fist. */
-  fistThreshold: number;
+  /** Openness above which a hand counts as open. Closing uses a lower threshold, see below. */
+  openThreshold: number;
   steerDeadzone: number;
   throttleDeadzone: number;
-  /** Swap which hand flies and which jumps, for left-handed players. */
-  swapHands: boolean;
-  /** joystick: one hand steers and throttles. split: one steers, the other throttles. */
-  mode: HandMode;
 }
 
 export const DEFAULT_HAND_TUNING: HandTuning = {
-  steerRange: 0.16,
+  steerRange: (35 * Math.PI) / 180,
   throttleRange: 0.14,
-  fistThreshold: 0.35,
-  steerDeadzone: 0.12,
+  openThreshold: 0.68,
+  steerDeadzone: 0.1,
   throttleDeadzone: 0.16,
-  swapHands: false,
-  mode: 'joystick',
 };
 
-/** Gap between the close and open thresholds, so a hand hovering at the boundary cannot chatter. */
-const FIST_HYSTERESIS = 0.18;
-/** A fist survives this long without a detection, so one dropped frame is not a second jump. */
-const FIST_GRACE = 0.15;
+/**
+ * Gap between the open and closed thresholds. Wide on purpose: a loosely curled, relaxed hand
+ * must still read as closed, because holding two tight fists for a whole run is exhausting and
+ * fatigue is what kills a controller like this.
+ */
+const GRIP_HYSTERESIS = 0.2;
+/** A hand's grip state survives this long without a detection, so one dropped frame is not a second jump. */
+const GRIP_GRACE = 0.15;
 /** Controls fade out over this long when a hand disappears, instead of sticking. */
 const DECAY = 0.2;
 /** No hands at all for this long pauses the run rather than flying the ship into a wall. */
@@ -42,24 +49,64 @@ const MIN_HAND_SCALE = 0.035;
 
 export type HandStatus = 'searching' | 'tracking' | 'lost';
 
-export interface HandNeutral {
-  fly: { x: number; y: number };
-  throttle: { x: number; y: number };
+/** Per-hand grip state machine driving the jump gesture. */
+class Grip {
+  /** True while the hand is open; hysteresis keeps it from chattering at the boundary. */
+  open = false;
+  /** Set once the hand has been closed, so hands that simply start open cannot fire a jump. */
+  private armed = false;
+  /** True from the moment an armed hand opens until it closes again. */
+  triggered = false;
+  private missing = 0;
+
+  reset(): void {
+    this.open = false;
+    this.armed = false;
+    this.triggered = false;
+    this.missing = 0;
+  }
+
+  update(openness: number, threshold: number): void {
+    this.missing = 0;
+    const wasOpen = this.open;
+    if (this.open ? openness < threshold - GRIP_HYSTERESIS : openness > threshold) this.open = !this.open;
+    if (!this.open) {
+      // Any closed hand is a loaded spring. Arming on the closed *state* rather than on the
+      // open-to-closed transition matters, because the resting posture is already closed: a hand
+      // that starts gripped never makes that transition and would never be able to jump.
+      this.armed = true;
+      this.triggered = false;
+    } else if (!wasOpen && this.armed) {
+      this.triggered = true;
+      this.armed = false;
+    }
+  }
+
+  /** Called when the hand is not visible; the grip is held briefly before being abandoned. */
+  lost(dt: number): void {
+    this.missing += dt;
+    if (this.missing >= GRIP_GRACE) {
+      this.open = false;
+      this.triggered = false;
+      this.armed = true;
+    }
+  }
 }
 
 export class HandMapper {
   readonly out: InputFrame = { steer: 0, throttle: 0, jump: false };
   status: HandStatus = 'searching';
   lostFor = 0;
-  neutral: HandNeutral = { fly: { x: 0, y: 0 }, throttle: { x: 0, y: 0 } };
+  /** Level hands mean straight ahead, so the steering angle needs no calibration by default. */
+  neutral = { angle: 0, height: 0 };
   tuning: HandTuning = { ...DEFAULT_HAND_TUNING };
   /** Live values for the tuning readout. */
-  readonly raw = { steer: 0, throttle: 0, flyOpen: 1, jumpOpen: 1, fly: false, jumpHand: false };
+  readonly raw = { tilt: 0, height: 0, leftOpen: 1, rightOpen: 1, hands: 0 };
 
   private steerF = new OneEuro(4, 1.5);
   private throttleF = new OneEuro(3, 1.0);
-  private fist = false;
-  private fistMissing = 0;
+  private left = new Grip();
+  private right = new Grip();
   private seen = false;
   private hasNeutral = false;
 
@@ -74,11 +121,11 @@ export class HandMapper {
     this.status = 'searching';
     this.lostFor = 0;
     this.seen = false;
-    this.fist = false;
-    this.fistMissing = 0;
-    // A stale neutral from a previous session would silently bias the steering of the next one,
-    // so the first hands seen after a restart become neutral again.
+    // A stale neutral from a previous session would silently bias the next one.
     this.hasNeutral = false;
+    this.neutral = { angle: 0, height: 0 };
+    this.left.reset();
+    this.right.reset();
     this.steerF.reset();
     this.throttleF.reset();
   }
@@ -87,21 +134,12 @@ export class HandMapper {
     this.tuning = { ...this.tuning, ...t };
   }
 
-  /** The hand that steers, and in split mode the other one throttles. */
-  private roles(pair: HandPair): { fly: HandReading | null; jump: HandReading | null } {
-    const fly = this.tuning.swapHands ? pair.left : pair.right;
-    const jump = this.tuning.swapHands ? pair.right : pair.left;
-    return { fly: usable(fly), jump: usable(jump) };
-  }
-
-  /** Makes the pose being held right now the neutral. Returns false if the flying hand is absent. */
+  /** Makes the pose being held right now the neutral. Needs both hands. */
   recentre(pair: HandPair): boolean {
-    const { fly, jump } = this.roles(pair);
-    if (!fly) return false;
-    this.neutral = {
-      fly: { x: fly.x, y: fly.y },
-      throttle: jump ? { x: jump.x, y: jump.y } : { x: fly.x, y: fly.y },
-    };
+    const left = usable(pair.left);
+    const right = usable(pair.right);
+    if (!left || !right) return false;
+    this.neutral = { angle: wheelAngle(left, right), height: (left.y + right.y) / 2 };
     this.hasNeutral = true;
     this.steerF.reset();
     this.throttleF.reset();
@@ -111,19 +149,23 @@ export class HandMapper {
   update(pair: HandPair, dt: number): void {
     const out = this.out;
     const t = this.tuning;
-    const { fly, jump } = this.roles(pair);
-    this.raw.fly = !!fly;
-    this.raw.jumpHand = !!jump;
-    this.raw.flyOpen = fly?.open ?? 1;
-    this.raw.jumpOpen = jump?.open ?? 1;
+    const left = usable(pair.left);
+    const right = usable(pair.right);
+    this.raw.hands = (left ? 1 : 0) + (right ? 1 : 0);
+    this.raw.leftOpen = left?.open ?? 0;
+    this.raw.rightOpen = right?.open ?? 0;
 
-    if (!fly && !jump) {
+    if (left) this.left.update(left.open, t.openThreshold);
+    else this.left.lost(dt);
+    if (right) this.right.update(right.open, t.openThreshold);
+    else this.right.lost(dt);
+    out.jump = this.left.triggered || this.right.triggered;
+
+    if (!left && !right) {
       this.lostFor += dt;
       const k = Math.max(0, 1 - this.lostFor / DECAY);
       out.steer *= k;
       out.throttle *= k;
-      this.releaseFist(dt);
-      out.jump = this.fist;
       if (this.seen && this.lostFor >= LOST_AFTER) this.status = 'lost';
       return;
     }
@@ -131,57 +173,37 @@ export class HandMapper {
     this.lostFor = 0;
     this.seen = true;
     this.status = 'tracking';
-    // The first hands seen become neutral, so play can start without an explicit calibration step.
-    if (!this.hasNeutral) this.recentre(pair);
 
-    if (fly) {
-      const steer = this.steerF.filter((fly.x - this.neutral.fly.x) / t.steerRange, dt);
-      this.raw.steer = steer;
-      out.steer = shapeAxis(Math.max(-1, Math.min(1, steer)), t.steerDeadzone);
-      if (t.mode === 'joystick') {
-        const push = this.throttleF.filter((fly.y - this.neutral.fly.y) / t.throttleRange, dt);
-        this.raw.throttle = push;
-        out.throttle = shapeAxis(Math.max(-1, Math.min(1, push)), t.throttleDeadzone);
-      }
-    } else {
-      const k = Math.max(0, 1 - dt / DECAY);
-      out.steer *= k;
-      if (t.mode === 'joystick') out.throttle *= k;
+    if (!left || !right) {
+      // Steering is a relation between two hands; with one it has no meaning, so it falls away
+      // rather than freezing at whatever it last read. Throttle is left where the player set it.
+      out.steer *= Math.max(0, 1 - dt / DECAY);
+      this.steerF.reset();
+      return;
     }
 
-    if (t.mode === 'split') {
-      if (jump) {
-        const push = this.throttleF.filter((jump.y - this.neutral.throttle.y) / t.throttleRange, dt);
-        this.raw.throttle = push;
-        out.throttle = shapeAxis(Math.max(-1, Math.min(1, push)), t.throttleDeadzone);
-      } else {
-        out.throttle *= Math.max(0, 1 - dt / DECAY);
-      }
+    // Height is only meaningful against a resting pose, so that one is calibrated; the angle is
+    // not, because hands held level already means straight ahead.
+    if (!this.hasNeutral) {
+      this.neutral = { angle: 0, height: (left.y + right.y) / 2 };
+      this.hasNeutral = true;
     }
 
-    if (jump) {
-      this.fistMissing = 0;
-      // Hysteresis: close on a firm fist, release only once the hand is clearly open again.
-      if (this.fist ? jump.open > t.fistThreshold + FIST_HYSTERESIS : jump.open < t.fistThreshold) {
-        this.fist = !this.fist;
-        this.fistMissing = 0;
-      }
-    } else {
-      this.releaseFist(dt);
-    }
-    // The simulation edge-triggers on jump, so a held fist is exactly one jump. Holding it
-    // through a dropped detection frame is what stops one fist reading as two.
-    out.jump = this.fist;
+    const tilt = this.steerF.filter(wrapPi(wheelAngle(left, right) - this.neutral.angle), dt);
+    this.raw.tilt = tilt;
+    // Turning the wheel clockwise drops the right hand, which in a y-up frame makes the
+    // left-to-right angle negative. Negate so a clockwise turn steers right.
+    out.steer = shapeAxis(Math.max(-1, Math.min(1, -tilt / t.steerRange)), t.steerDeadzone);
+
+    const height = this.throttleF.filter((left.y + right.y) / 2 - this.neutral.height, dt);
+    this.raw.height = height;
+    out.throttle = shapeAxis(Math.max(-1, Math.min(1, height / t.throttleRange)), t.throttleDeadzone);
   }
+}
 
-  private releaseFist(dt: number): void {
-    if (!this.fist) return;
-    this.fistMissing += dt;
-    if (this.fistMissing >= FIST_GRACE) {
-      this.fist = false;
-      this.fistMissing = 0;
-    }
-  }
+/** Angle of the line from the left palm to the right palm; zero when the hands are level. */
+export function wheelAngle(left: HandReading, right: HandReading): number {
+  return Math.atan2(right.y - left.y, right.x - left.x);
 }
 
 function usable(h: HandReading | null): HandReading | null {

@@ -39,6 +39,11 @@ const hand = () => page.evaluate(() => window.__neonTest.hand());
 const ship = () => page.evaluate(() => window.__neonTest.ship());
 const screen = () => page.evaluate(() => window.__neonTest.screen());
 const setHands = (p) => page.evaluate((v) => window.__hands.set(v), p);
+/** Both hands gripped closed and level: the resting posture. */
+const GRIP = { right: { x: -0.22, y: 0, curl: 1 }, left: { x: 0.22, y: 0, curl: 1 } };
+/** Turning the wheel clockwise drops the right hand and raises the left. */
+const turn = (t) => ({ right: { y: -t }, left: { y: t } });
+const raise = (h) => ({ right: { y: h }, left: { y: h } });
 
 async function until(predicate, label, timeout = 8000) {
   try {
@@ -49,6 +54,8 @@ async function until(predicate, label, timeout = 8000) {
     return false;
   }
 }
+
+await setHands(GRIP);
 
 // --- Camera and model -------------------------------------------------------
 await page.click('[data-action=hand]');
@@ -69,26 +76,40 @@ if (shots) await page.screenshot({ path: `${shots}/hand-live.png` });
 await page.click('[data-action=hand-recentre]');
 await page.waitForTimeout(300);
 const neutral = await hand();
-check(Math.abs(neutral.steer) < 0.05, 'open hands held still are neutral', neutral.steer.toFixed(3));
-check(neutral.jump === false, 'open hands do not jump');
+check(Math.abs(neutral.steer) < 0.05, 'level hands are neutral steering', neutral.steer.toFixed(3));
+check(neutral.jump === false, 'gripped hands do not jump');
 
-// Moving right in the mirror means moving left in the raw camera image.
-await setHands({ right: { x: -0.42 } });
-check(await until(() => window.__neonTest.hand().steer > 0.5, 'steer right'), 'moving the flying hand right steers right', (await hand()).steer.toFixed(2));
+await setHands(turn(0.18));
+check(await until(() => window.__neonTest.hand().steer > 0.5, 'steer right'), 'turning the wheel clockwise steers right', (await hand()).steer.toFixed(2));
+const steeringThrottle = (await hand()).throttle;
+check(Math.abs(steeringThrottle) < 0.15, 'steering does not disturb the throttle', steeringThrottle.toFixed(2));
 
-await setHands({ right: { x: -0.02 } });
-check(await until(() => window.__neonTest.hand().steer < -0.5, 'steer left'), 'moving it left steers left', (await hand()).steer.toFixed(2));
+await setHands(turn(-0.18));
+check(await until(() => window.__neonTest.hand().steer < -0.5, 'steer left'), 'turning it anticlockwise steers left', (await hand()).steer.toFixed(2));
 
-await setHands({ right: { x: -0.22, y: 0.2 } });
-check(await until(() => window.__neonTest.hand().throttle > 0.5, 'throttle up'), 'raising it accelerates', (await hand()).throttle.toFixed(2));
+await setHands(GRIP);
+await until(() => Math.abs(window.__neonTest.hand().steer) < 0.15, 'steer neutral');
 
-await setHands({ right: { y: -0.2 } });
-check(await until(() => window.__neonTest.hand().throttle < -0.5, 'throttle down'), 'lowering it brakes', (await hand()).throttle.toFixed(2));
+await setHands(raise(0.18));
+check(await until(() => window.__neonTest.hand().throttle > 0.5, 'throttle up'), 'raising both hands accelerates', (await hand()).throttle.toFixed(2));
+const throttleSteer = (await hand()).steer;
+check(Math.abs(throttleSteer) < 0.1, 'throttling does not disturb the steering', throttleSteer.toFixed(2));
 
-await setHands({ right: { y: 0 } });
+await setHands(raise(-0.18));
+check(await until(() => window.__neonTest.hand().throttle < -0.5, 'throttle down'), 'lowering both hands brakes', (await hand()).throttle.toFixed(2));
+
+await setHands(GRIP);
 await until(() => Math.abs(window.__neonTest.hand().throttle) < 0.2, 'throttle neutral');
 
-// --- Fist to jump -----------------------------------------------------------
+// The whole point of measuring between the hands: shifting in your seat is not a turn.
+await setHands({ right: { x: -0.10, y: 0.06 }, left: { x: 0.34, y: 0.06 } });
+await page.waitForTimeout(700);
+const shifted = await hand();
+check(Math.abs(shifted.steer) < 0.15, 'shifting both hands together does not steer', shifted.steer.toFixed(2));
+await setHands(GRIP);
+await page.waitForTimeout(400);
+
+// --- Opening a hand to jump -------------------------------------------------
 await page.evaluate(() => {
   window.__jumps = 0;
   let was = false;
@@ -98,31 +119,23 @@ await page.evaluate(() => {
     was = now;
   }, 8);
 });
-await setHands({ left: { curl: 1 } });
-check(await until(() => window.__jumps > 0, 'jump', 4000), 'a fist fires a jump');
+await setHands({ left: { curl: 0 } });
+check(await until(() => window.__jumps > 0, 'jump', 4000), 'opening a hand fires a jump');
 
-// A held fist must stay one jump: the simulation edge-triggers, so a flicker would be two.
+// A held-open hand must stay one jump: the simulation edge-triggers, so a flicker would be two.
 await page.waitForTimeout(900);
 const held = await page.evaluate(() => window.__jumps);
-check(held === 1, 'holding the fist is exactly one jump', `${held} jump(s)`);
-check((await hand()).jump === true, 'jump stays asserted while the fist is held');
+check(held === 1, 'holding the hand open is exactly one jump', `${held} jump(s)`);
 
-await setHands({ left: { curl: 0 } });
-check(await until(() => window.__neonTest.hand().jump === false, 'jump release', 3000), 'opening the hand releases the jump');
+await setHands({ left: { curl: 1 } });
+check(await until(() => window.__neonTest.hand().jump === false, 'jump release', 3000), 'closing the hand again releases the jump');
+
+// The other hand must work identically.
+await setHands({ right: { curl: 0 } });
+check(await until(() => window.__jumps === 2, 'second jump', 4000), 'the other hand jumps too', `${await page.evaluate(() => window.__jumps)} total`);
+await setHands(GRIP);
+await page.waitForTimeout(400);
 await page.evaluate(() => clearInterval(window.__jumpWatch));
-
-// --- Cross-talk -------------------------------------------------------------
-// Held off neutral, so a steering value that collapses to zero would be caught. Comparing two
-// zeroes would have passed even with steering completely broken.
-await setHands({ right: { x: -0.30 } });
-await until(() => Math.abs(window.__neonTest.hand().steer - 0.5) < 0.35, 'partial steer');
-const beforeCurl = (await hand()).steer;
-await setHands({ right: { curl: 1 } });
-await page.waitForTimeout(700);
-const afterCurl = (await hand()).steer;
-check(Math.abs(beforeCurl) > 0.15, 'the cross-talk check is held off neutral', beforeCurl.toFixed(2));
-check(Math.abs(afterCurl - beforeCurl) < 0.15, 'closing the flying hand does not move the steering', `${beforeCurl.toFixed(2)} -> ${afterCurl.toFixed(2)}`);
-await setHands({ right: { x: -0.22, curl: 0 } });
 
 // --- Driving the actual ship ------------------------------------------------
 await page.click('[data-action=hand-done]');
@@ -135,18 +148,18 @@ check((await screen()) === 'playing', 'road started');
 const chip = await page.textContent('.chip.cam-chip').catch(() => '');
 check((chip ?? '').includes('HANDS'), 'HUD shows the hands chip', chip ?? '(missing)');
 
-await setHands({ right: { y: 0.2 } });
-check(await until(() => window.__neonTest.ship().vz > 2, 'forward speed', 10000), 'raising the hand accelerates the ship', `vz ${(await ship()).vz.toFixed(1)}`);
+await setHands(raise(0.18));
+check(await until(() => window.__neonTest.ship().vz > 2, 'forward speed', 10000), 'raising both hands accelerates the ship', `vz ${(await ship()).vz.toFixed(1)}`);
 
 const before = await ship();
-await setHands({ right: { x: -0.45 } });
-check(await until((x) => window.__neonTest.ship().x > x + 0.3, 'ship right', 6000), 'moving the hand right moves the ship right', `${before.x.toFixed(2)} -> ${(await ship()).x.toFixed(2)}`);
+await setHands({ right: { y: 0.18 - 0.2 }, left: { y: 0.18 + 0.2 } });
+check(await until((x) => window.__neonTest.ship().x > x + 0.3, 'ship right', 6000), 'turning the wheel moves the ship right', `${before.x.toFixed(2)} -> ${(await ship()).x.toFixed(2)}`);
 if (shots) await page.screenshot({ path: `${shots}/hand-driving.png` });
 
 const mid = await ship();
-await setHands({ right: { x: 0.0 } });
-check(await until(() => window.__neonTest.ship().x < 0, 'ship left', 6000), 'moving it left moves the ship back', `${mid.x.toFixed(2)} -> ${(await ship()).x.toFixed(2)}`);
-await setHands({ right: { x: -0.22 } });
+await setHands({ right: { y: 0.18 + 0.2 }, left: { y: 0.18 - 0.2 } });
+check(await until(() => window.__neonTest.ship().x < 0, 'ship left', 6000), 'turning it back moves the ship left', `${mid.x.toFixed(2)} -> ${(await ship()).x.toFixed(2)}`);
+await setHands(raise(0.18));
 
 // --- Losing the hands pauses instead of crashing ----------------------------
 await setHands({ right: null, left: null });
@@ -155,7 +168,7 @@ const lost = await hand();
 check(lost.status === 'lost', 'tracking reports the loss', lost.status);
 check(Math.abs(lost.steer) < 0.001, 'controls fade to neutral when the hands vanish', lost.steer.toFixed(4));
 
-await setHands({ right: { x: -0.22, y: 0, curl: 0 }, left: { x: 0.22, y: 0, curl: 0 } });
+await setHands(GRIP);
 check(await until(() => window.__neonTest.hand().status === 'tracking', 'recovery', 8000), 'tracking recovers when the hands come back');
 
 // --- One camera at a time ---------------------------------------------------

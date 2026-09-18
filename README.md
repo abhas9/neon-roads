@@ -95,7 +95,7 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 - 🚀 **Boost overdrive:** boost pads push you past top speed, which makes boost-then-jump a skill of its own.
 - 📱 **Phone as controller:** scan a QR code and your phone becomes a wireless gamepad over peer-to-peer WebRTC.
 - 🪄 **Wand controller (experimental):** print a two-colour marker, tape it to a pen, and steer with your webcam — tilt to turn, push to accelerate, flick to jump. All tracking happens in the page; no video leaves your device. See [Wand controller](#wand-controller-steer-with-a-webcam).
-- 🖐 **Hand controller (experimental):** nothing to print and nothing to hold — wave one hand to steer and throttle, make a fist with the other to jump. See [Hand controller](#hand-controller-fly-with-your-bare-hands).
+- 🖐 **Hand controller (experimental):** nothing to print and nothing to hold — grip an invisible steering wheel with both hands, turn to steer, raise or lower to change speed, open a hand to jump. See [Hand controller](#hand-controller-fly-with-your-bare-hands).
 - 🎮 **Input:** keyboard (with analog steering ramp), gamepad (analog stick and triggers), and on-screen touch controls.
 - 👓 **Readable over any world:** every screen passes a WCAG AA contrast audit. Menu, HUD and label text sits on frosted backplates, so it stays legible over bright suns, moons and floors.
 - ♿ **Colour-independent tiles:** every special tile also has an animated pattern (plus sign, chevrons, dots, stripes, hazard bars), so you don't need to tell colours apart. Also optional jump assist and a reduced-motion setting.
@@ -121,7 +121,7 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 | **Pair a phone with a QR code** | **The phone becomes the gamepad** |
 | <img src="docs/screenshots/wand-calibrate.jpg" alt="Wand controller calibration screen with a live camera preview and the marker inside a dashed box"> | <img src="docs/screenshots/wand-tuning.jpg" alt="Wand controller tuning screen with steer and throttle meters, tracking diagnostics and sensitivity sliders"> |
 | **Calibrate a paper wand on camera** | **Live axes, tracking and latency readouts** |
-| <img src="docs/screenshots/hand-tuning.jpg" alt="Hand controller screen showing two tracked hand skeletons, steer and throttle meters and a lit JUMP indicator"> | <img src="docs/screenshots/wand-marker.jpg" alt="Printable marker sheet with a magenta and a cyan disc"> |
+| <img src="docs/screenshots/hand-tuning.jpg" alt="Hand controller screen showing two tracked hand skeletons gripping an invisible wheel, with steer and throttle meters"> | <img src="docs/screenshots/wand-marker.jpg" alt="Printable marker sheet with a magenta and a cyan disc"> |
 | **Fly with your bare hands** | **Print a wand in one page** |
 
 <p align="center">
@@ -313,53 +313,62 @@ The setup screen shows tracking lock, camera frame rate, pipeline lag and CPU co
 
 > **Experimental**, like the wand. Nothing to print and nothing to hold.
 
-| Hand | Gesture | Control |
-|---|---|---|
-| **Right** | move left and right | Steer |
-| **Right** | raise and lower | Accelerate / brake |
-| **Left** | make a **fist** | Jump (open the hand to reset) |
-| either | `C`, or the **Recentre** button | Make the pose you are holding the new neutral |
+Hold both hands up as if you were gripping a steering wheel.
 
-Open **Hand Controller** on the title screen, allow the camera, and play. There is no calibration
-step: the first hands seen become the neutral pose, and **Recentre** moves it whenever you like.
+| Gesture | Control |
+|---|---|
+| **Turn the wheel** — one hand up, the other down | Steer |
+| **Raise or lower both hands** together | Accelerate / brake |
+| **Open either hand**, then close it again | Jump |
+| `C`, or the **Recentre** button | Set the resting height for the throttle |
 
-**Settings.** *Left-handed* swaps the roles so the left hand flies and the right one jumps.
-*Split hands* gives each hand one job instead — one steers, the other throttles and jumps —
-which some people find easier to coordinate. Steering range, throttle range and fist sensitivity
-are all adjustable, with a live openness bar showing exactly where your fist crosses the line.
+Open **Hand Controller** on the title screen, allow the camera, and play. Level hands already mean
+straight ahead, so steering needs no calibration at all. Your grip can stay relaxed — only a
+deliberate open hand counts as a jump.
+
+Steering range, throttle range and how open a hand must be all have sliders, with live bars
+showing exactly where your own hands cross the line.
 
 ### How it works
 
+- **Steering is measured between your hands, not from either one.** The angle of the line joining
+  your palms is self-correcting: shift in your seat and both hands move together, so the steering
+  does not budge. Absolute hand position drifts as your arm wanders; this does not.
+- **The two axes cannot interfere.** Steering is the *difference* in hand height and throttle is
+  their *mean*, which are independent by construction — you can turn without changing speed, or
+  speed up without turning. Both are tested.
 - **MediaPipe hand landmarks, not a colour tracker.** A skin-tone segmenter would have been far
   smaller and needed no download, but it would work noticeably better for some skin tones and
   lighting than others. A pre-trained landmark model is the fairer choice.
 - **Loaded only when you ask for it.** About 9 MB of runtime and weights, lazily fetched with a
   progress bar the first time and cached after. Nobody who never opens this screen pays for it,
   and the main bundle is unchanged. The files are served by the site itself rather than a CDN.
-- **A fist beats a wave for jumping.** A fist is a state change, not a velocity threshold, so it
-  needs no confirmation window: about **70 ms** of latency against the wand flick's ~100 ms.
+- **Opening a hand beats waving for jumping.** It is a state change, not a velocity threshold, so
+  it needs no confirmation window: about **70 ms** of latency against the wand flick's ~100 ms.
 - **Hands are told apart by where they are, not by what the model calls them.** Handedness labels
   assume a selfie-flipped image, and getting that assumption backwards silently swaps every
   control. Position in the mirrored view is unambiguous; the label is only consulted for a lone
   hand, and its meaning is learned from frames where both hands were visible.
 - **Steering reads the palm, not the fingers.** The position is averaged over the wrist and
-  knuckles, which barely move when the fingers curl, so making a fist does not drag the steering
-  with it.
-- **One fist is one jump.** The simulation edge-triggers on jump, so the fist state is held
-  through a dropped detection frame rather than re-firing and double-jumping.
-- **Safe when it loses you.** Controls fade to neutral and the run auto-pauses after half a
-  second, exactly as the wand does.
-- **Measured cost:** 6.7 ms per frame for inference and mapping on a laptop GPU, with the game
+  knuckles, which barely move as the fingers curl, so opening a hand to jump does not yank the
+  steering with it.
+- **One open hand is one jump.** The simulation edge-triggers on jump, so the grip state is held
+  through a dropped detection frame rather than re-firing and double-jumping. Close the hand again
+  to arm the next one.
+- **Safe when it loses you.** With one hand visible steering falls away and your throttle is left
+  alone; with neither, controls fade to neutral and the run auto-pauses after half a second.
+- **Measured cost:** 6.7–9.6 ms per frame for inference and mapping on a laptop GPU, with the game
   still rendering at 60 fps alongside it.
 
 ### Troubleshooting
 
-- **"Show both hands to the camera":** the flying hand is not visible. Sit so both hands fit in
-  frame at about chest height.
-- **Jumps fire too easily, or not at all:** watch the *Fist hand* bar and drag **Fist
-  sensitivity** so the marker sits between your open hand and your fist.
-- **Steering feels reversed:** you may be flying with the wrong hand — try **Left-handed**.
-- **The ship drifts:** hold your hands comfortably and press `C`.
+- **"Show both hands to the camera":** steering needs both. Sit so both fit in frame at about
+  chest height.
+- **Jumps fire when you did not mean them, or not at all:** watch the *Left hand* and *Right hand*
+  bars and drag **Open sensitivity** so the marker sits between your relaxed grip and your open
+  hand.
+- **The ship creeps forward or back on its own:** hold your hands at a comfortable resting height
+  and press `C`.
 - **Only one camera controller at a time:** turning on the wand releases the camera from hand
   tracking, and vice versa.
 - **Requires HTTPS:** as with the wand, browsers only grant camera access on secure origins.
@@ -450,7 +459,7 @@ The roads live in [`src/levels/roads/`](src/levels/roads). After editing, run `n
 | `npm run check:gpu` | Renders several worlds in installed Chrome on the real GPU and fails on black-outs or invalid bloom output (dev server must be running) |
 | `npm run e2e:phone` | Pairs a phone page with the game over real WebRTC, navigates menus and drives the ship (dev server must be running) |
 | `npm run e2e:wand` | Drives the camera wand end to end with a synthetic webcam (`canvas.captureStream` behind a stubbed `getUserMedia`): calibration, all three axes, the flick-to-jump gesture, steering the real ship, auto-pause on tracking loss, and calibration surviving a reload (dev server must be running) |
-| `npm run e2e:hand` | Drives the hand controller end to end with a synthetic webcam and a stubbed landmark model, so everything downstream of the model runs for real: hand assignment, both axes, fist-to-jump, one fist staying one jump, steering the actual ship, auto-pause, and one camera controller releasing the other (dev server must be running) |
+| `npm run e2e:hand` | Drives the hand controller end to end with a synthetic webcam and a stubbed landmark model, so everything downstream of the model runs for real: hand assignment, both axes and their independence, a body shift not registering as a turn, open-hand-to-jump, one open hand staying one jump, steering the actual ship, auto-pause, and one camera controller releasing the other (dev server must be running) |
 | `npm run perf:hand` | Loads the **real** MediaPipe model on the GPU and measures what it costs, including the in-game frame rate with and without it. This is the part `e2e:hand` deliberately stubs (dev server must be running) |
 | `npm run e2e:celebrate` | Finishes a road by replaying a solver run. Checks the fireworks, the results screen, the Share on X link and clipboard scorecard, the saved ghost, and that `G` toggles the hologram (dev server must be running) |
 | `npm run audit:contrast` | WCAG contrast audit of every visible text on 36 screens (menus, HUD over six worlds, results, mobile, phone controller, wand and hand setup). It measures each text box against what is actually rendered behind it, including the 3D scene, and fails below AA (4.5:1, or 3:1 for large text). Needs the dev server running |
