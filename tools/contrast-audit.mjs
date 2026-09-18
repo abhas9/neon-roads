@@ -146,43 +146,13 @@ const desktop = async (roads = progress, extraInit = null, settings = {}) => {
   await ctx.close();
 }
 {
-  // Wand controller: a synthetic camera stands in for a webcam so the live preview, the
-  // calibration overlay and the diagnostics panel are all on screen for real.
-  const { ctx, page } = await desktop();
-  await ctx.addInitScript(fakeCamera);
-  await page.goto(base);
-  await page.waitForTimeout(1200);
-  await page.click('[data-action=wand]');
-  await page.waitForSelector('.wand-screen');
-  await audit(page, 'Wand intro');
-  await page.click('[data-action=wand-enable]');
-  await page.waitForSelector('[data-action=wand-calibrate]', { timeout: 20000 });
-  await page.waitForTimeout(700);
-  await audit(page, 'Wand calibration');
-  await page.click('[data-action=wand-calibrate]');
-  await page.waitForSelector('[data-action=wand-recentre]', { timeout: 20000 });
-  await page.waitForTimeout(900);
-  await audit(page, 'Wand tuning and diagnostics');
-  // And the in-run HUD with the wand chip alongside everything else.
-  await page.click('[data-action=wand-done]');
-  await page.waitForSelector('.title-screen, .worlds-screen', { timeout: 8000 });
-  if (await page.isVisible('[data-action=campaign]')) await page.click('[data-action=campaign]');
-  await page.waitForSelector('.worlds-screen');
-  await page.click('[data-action=road]');
-  await page.waitForFunction(() => document.querySelector('.hud-timer')?.textContent !== '00:00.00', null, { timeout: 15000 });
-  await page.waitForTimeout(600);
-  await audit(page, 'HUD with wand chip');
-  await ctx.close();
-}
-{
   // Hand controller, with the landmark model stubbed so the audit needs no 9MB download.
   const { ctx, page } = await desktop();
   await ctx.addInitScript(fakeCamera);
   await ctx.addInitScript(fakeHands);
   await page.goto(base);
   await page.waitForTimeout(1200);
-  await page.evaluate(() => window.__wand.set({ visible: false }));
-  await page.evaluate(() => window.__hands.set({ right: { y: -0.06, curl: 1 }, left: { y: 0.06, curl: 1 } }));
+    await page.evaluate(() => window.__hands.set({ right: { y: -0.06, curl: 1 }, left: { y: 0.06, curl: 1 } }));
   await page.click('[data-action=hand]');
   await page.waitForSelector('.hand-screen');
   await audit(page, 'Hand intro');
@@ -190,6 +160,15 @@ const desktop = async (roads = progress, extraInit = null, settings = {}) => {
   await page.waitForSelector('[data-action=hand-recentre]', { timeout: 20000 });
   await page.waitForTimeout(900);
   await audit(page, 'Hand tuning and diagnostics');
+  // And the in-run HUD with the hand-tracking chip alongside everything else.
+  await page.click('[data-action=hand-done]');
+  await page.waitForSelector('.title-screen, .worlds-screen', { timeout: 8000 });
+  if (await page.isVisible('[data-action=campaign]')) await page.click('[data-action=campaign]');
+  await page.waitForSelector('.worlds-screen');
+  await page.click('[data-action=road]');
+  await page.waitForFunction(() => document.querySelector('.hud-timer')?.textContent !== '00:00.00', null, { timeout: 15000 });
+  await page.waitForTimeout(600);
+  await audit(page, 'HUD with hand tracking chip');
   await ctx.close();
 }
 {

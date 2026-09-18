@@ -27,7 +27,6 @@ await page.addInitScript(() => {
 // Real camera frames, but no stubbed detector: the genuine model runs against them.
 await page.addInitScript(fakeCamera);
 await page.goto(base);
-await page.evaluate(() => window.__wand.set({ visible: false }));
 
 const hand = () => page.evaluate(() => window.__neonTest.hand());
 

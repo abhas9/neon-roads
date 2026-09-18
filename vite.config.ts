@@ -30,7 +30,6 @@ export default defineConfig(({ command }) => {
         input: {
           main: resolve(import.meta.dirname, 'index.html'),
           controller: resolve(import.meta.dirname, 'controller.html'),
-          marker: resolve(import.meta.dirname, 'marker.html'),
         },
       },
     },

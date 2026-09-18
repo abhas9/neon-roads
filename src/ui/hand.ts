@@ -1,7 +1,7 @@
 /**
  * Setup screen for the hand controller: permission, model download, live skeleton preview and
- * tuning. Like the wand screen, the diagnostics are on show rather than behind a debug flag:
- * how well hand tracking works depends entirely on the room, and the player needs to see why.
+ * tuning. Diagnostics are on show rather than behind a debug flag: how well hand tracking works
+ * depends entirely on the room, and the player needs to be able to see why.
  */
 import type { HandInput } from '../hand/handInput';
 import type { HandObservation } from '../hand/gestures';
@@ -62,18 +62,18 @@ export class HandScreen {
   private html(): string {
     return `
   <div class="screen hand-screen no-anim">
-    <div class="panel wide wand-panel">
+    <div class="panel wide cam-panel">
       <div class="screen-head inline">
         <button class="nav btn ghost back" data-action="back">‹ Back</button>
         <h2>Hand Controller</h2>
         <span class="tag-exp">Experimental</span>
       </div>
-      <div class="wand-grid">
-        <div class="wand-view ${this.step}">
-          <canvas class="wand-preview hand-preview" width="480" height="360"></canvas>
-          ${this.step === 'live' ? '<div class="hand-load hidden"><div class="hand-load-bar"><i></i></div><span class="hand-load-text"></span></div>' : '<div class="wand-camera-off">🖐</div>'}
+      <div class="cam-grid">
+        <div class="cam-view ${this.step}">
+          <canvas class="cam-preview hand-preview" width="480" height="360"></canvas>
+          ${this.step === 'live' ? '<div class="hand-load hidden"><div class="hand-load-bar"><i></i></div><span class="hand-load-text"></span></div>' : '<div class="cam-off">🖐</div>'}
         </div>
-        <div class="wand-side">${this.sideHtml()}</div>
+        <div class="cam-side">${this.sideHtml()}</div>
       </div>
     </div>
   </div>`;
@@ -84,7 +84,7 @@ export class HandScreen {
       case 'intro':
         return `
           <p>Hold both hands up as if gripping a steering wheel, and fly the ship with them. Nothing to print, nothing to hold.</p>
-          <ul class="wand-steps">
+          <ul class="cam-steps">
             <li><b>Turn</b> the wheel — one hand up, the other down — to steer.</li>
             <li><b>Raise or lower both hands</b> together to speed up or brake.</li>
             <li><b>Open either hand</b> to jump, then close it again for the next one.</li>
@@ -97,7 +97,7 @@ export class HandScreen {
       case 'denied':
       case 'error':
         return `
-          <p class="wand-error">${this.hand.error}</p>
+          <p class="cam-error">${this.hand.error}</p>
           <div class="actions left">
             <button class="nav btn primary" data-action="hand-enable">Try again</button>
             <button class="nav btn ghost" data-action="back">Back</button>
@@ -105,17 +105,17 @@ export class HandScreen {
       case 'live': {
         const s = this.settings();
         const slider = (key: 'handSteerRange' | 'handThrottleRange' | 'handOpen', label: string, min: number, max: number, step: number, hint: string) =>
-          `<label class="setting wand-slider"><span><b>${label}</b><small>${hint}</small></span>
+          `<label class="setting cam-slider"><span><b>${label}</b><small>${hint}</small></span>
             <input class="nav" type="range" min="${min}" max="${max}" step="${step}" value="${s[key]}" data-slider="${key}"></label>`;
         return `
-          <div class="wand-live">
-            <div class="wand-axes">
-              <span>Steer<div class="wand-bar steer"><i></i></div></span>
-              <span>Throttle<div class="wand-bar throttle"><i></i></div></span>
-              <span>Left hand<div class="wand-bar open left"><i></i><b class="mark"></b><em class="jump-pill">OPEN</em></div></span>
-              <span>Right hand<div class="wand-bar open right"><i></i><b class="mark"></b><em class="jump-pill">OPEN</em></div></span>
+          <div class="cam-live">
+            <div class="cam-axes">
+              <span>Steer<div class="cam-bar steer"><i></i></div></span>
+              <span>Throttle<div class="cam-bar throttle"><i></i></div></span>
+              <span>Left hand<div class="cam-bar open left"><i></i><b class="mark"></b><em class="jump-pill">OPEN</em></div></span>
+              <span>Right hand<div class="cam-bar open right"><i></i><b class="mark"></b><em class="jump-pill">OPEN</em></div></span>
             </div>
-            <div class="wand-diag">
+            <div class="cam-diag">
               <span>Hands<b class="v-hands">–</b></span>
               <span>Camera<b class="v-fps">–</b></span>
               <span>Lag<b class="v-lat">–</b></span>
@@ -261,16 +261,16 @@ export class HandScreen {
         el.style.width = `${Math.min(100, Math.max(0, v * 100))}%`;
       }
     };
-    fill('.wand-bar.steer', m.out.steer);
-    fill('.wand-bar.throttle', m.out.throttle);
-    fill('.wand-bar.open.left', m.raw.leftOpen, false);
-    fill('.wand-bar.open.right', m.raw.rightOpen, false);
+    fill('.cam-bar.steer', m.out.steer);
+    fill('.cam-bar.throttle', m.out.throttle);
+    fill('.cam-bar.open.left', m.raw.leftOpen, false);
+    fill('.cam-bar.open.right', m.raw.rightOpen, false);
     const threshold = `${this.settings().handOpen * 100}%`;
-    for (const mark of root.querySelectorAll<HTMLElement>('.wand-bar.open .mark')) mark.style.left = threshold;
+    for (const mark of root.querySelectorAll<HTMLElement>('.cam-bar.open .mark')) mark.style.left = threshold;
     // A closed hand drives its bar to zero width, so the open state gets its own indicator
     // rather than being read off a bar that is empty exactly when it matters.
-    root.querySelector('.wand-bar.open.left .jump-pill')?.classList.toggle('on', m.raw.leftOpen > this.settings().handOpen);
-    root.querySelector('.wand-bar.open.right .jump-pill')?.classList.toggle('on', m.raw.rightOpen > this.settings().handOpen);
+    root.querySelector('.cam-bar.open.left .jump-pill')?.classList.toggle('on', m.raw.leftOpen > this.settings().handOpen);
+    root.querySelector('.cam-bar.open.right .jump-pill')?.classList.toggle('on', m.raw.rightOpen > this.settings().handOpen);
 
     const set = (sel: string, text: string, cls = '') => {
       const el = root.querySelector(sel);

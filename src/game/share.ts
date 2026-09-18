@@ -10,13 +10,10 @@ export function gameUrl(loc: { hostname: string; origin: string; pathname: strin
 }
 
 /** Camera-based controllers, tagged on a shared scorecard. */
-export type CameraControl = 'wand' | 'hands';
+export type CameraControl = 'hands';
 
-const CONTROL_ROW: Record<CameraControl, string> = { wand: 'CAMERA WAND', hands: 'HAND TRACKING' };
-const CONTROL_POST: Record<CameraControl, string> = {
-  wand: '🪄 Flown with a paper wand and a webcam',
-  hands: '🖐 Flown with bare hands and a webcam',
-};
+const CONTROL_ROW: Record<CameraControl, string> = { hands: 'HAND TRACKING' };
+const CONTROL_POST: Record<CameraControl, string> = { hands: '🖐 Flown with bare hands and a webcam' };
 
 export interface RoadScore {
   kind: 'road';

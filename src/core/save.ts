@@ -7,13 +7,6 @@ export interface Settings {
   bloom: boolean;
   quality: 'high' | 'low';
   touchControls: 'auto' | 'on' | 'off';
-  /** Wand tilt, in degrees, that gives full steering. Lower is twitchier. */
-  wandSensitivity: number;
-  /** Fractional change in disc separation that gives full throttle. */
-  wandThrottle: number;
-  /** Upward flick speed that fires a jump. */
-  wandFlick: number;
-  wandInvert: boolean;
   /** Wheel tilt, in degrees, that gives full steering. */
   handSteerRange: number;
   /** Hand travel, as a fraction of frame height, for full throttle. */
@@ -52,10 +45,6 @@ export const DEFAULT_SETTINGS: Settings = {
   bloom: true,
   quality: 'high',
   touchControls: 'auto',
-  wandSensitivity: 40,
-  wandThrottle: 0.22,
-  wandFlick: 1.8,
-  wandInvert: false,
   handSteerRange: 35,
   handThrottleRange: 0.14,
   handOpen: 0.68,

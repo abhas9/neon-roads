@@ -29,7 +29,6 @@ It's a tribute to **SkyRoads**, the 1993 DOS classic by BlueMoon Software.
 - [Holographic ghost ship](#holographic-ghost-ship)
 - [Victory celebration and Share on X](#victory-celebration-and-share-on-x)
 - [Use your phone as a controller](#use-your-phone-as-a-controller)
-- [Wand controller: steer with a webcam](#wand-controller-steer-with-a-webcam)
 - [Hand controller: fly with your bare hands](#hand-controller-fly-with-your-bare-hands)
 - [Run locally](#run-locally)
 - [Deploy to GitHub Pages](#deploy-to-github-pages)
@@ -94,8 +93,7 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 - 📅 **Daily Run:** the same generated road for everyone on a given day, with a ghost of your best attempt.
 - 🚀 **Boost overdrive:** boost pads push you past top speed, which makes boost-then-jump a skill of its own.
 - 📱 **Phone as controller:** scan a QR code and your phone becomes a wireless gamepad over peer-to-peer WebRTC.
-- 🪄 **Wand controller (experimental):** print a two-colour marker, tape it to a pen, and steer with your webcam — tilt to turn, push to accelerate, flick to jump. All tracking happens in the page; no video leaves your device. See [Wand controller](#wand-controller-steer-with-a-webcam).
-- 🖐 **Hand controller (experimental):** nothing to print and nothing to hold — grip an invisible steering wheel with both hands, turn to steer, raise or lower to change speed, open a hand to jump. See [Hand controller](#hand-controller-fly-with-your-bare-hands).
+- 🖐 **Hand controller (experimental):** grip an invisible steering wheel with both hands — turn to steer, raise or lower to change speed, open a hand to jump. Webcam only, nothing to hold. See [Hand controller](#hand-controller-fly-with-your-bare-hands).
 - 🎮 **Input:** keyboard (with analog steering ramp), gamepad (analog stick and triggers), and on-screen touch controls.
 - 👓 **Readable over any world:** every screen passes a WCAG AA contrast audit. Menu, HUD and label text sits on frosted backplates, so it stays legible over bright suns, moons and floors.
 - ♿ **Colour-independent tiles:** every special tile also has an animated pattern (plus sign, chevrons, dots, stripes, hazard bars), so you don't need to tell colours apart. Also optional jump assist and a reduced-motion setting.
@@ -119,10 +117,8 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 | **Glass Moon: low gravity, long falls** | **Event Horizon: gravity stops making sense** |
 | <img src="docs/screenshots/phone-pairing.jpg" alt="Phone controller pairing screen with QR code"> | <img src="docs/screenshots/phone-pad.jpg" alt="Phone controller pad with steering stick and jump button"> |
 | **Pair a phone with a QR code** | **The phone becomes the gamepad** |
-| <img src="docs/screenshots/wand-calibrate.jpg" alt="Wand controller calibration screen with a live camera preview and the marker inside a dashed box"> | <img src="docs/screenshots/wand-tuning.jpg" alt="Wand controller tuning screen with steer and throttle meters, tracking diagnostics and sensitivity sliders"> |
-| **Calibrate a paper wand on camera** | **Live axes, tracking and latency readouts** |
-| <img src="docs/screenshots/hand-tuning.jpg" alt="Hand controller screen showing two tracked hand skeletons gripping an invisible wheel, with steer and throttle meters"> | <img src="docs/screenshots/wand-marker.jpg" alt="Printable marker sheet with a magenta and a cyan disc"> |
-| **Fly with your bare hands** | **Print a wand in one page** |
+| <img src="docs/screenshots/hand-tuning.jpg" alt="Hand controller screen showing two tracked hand skeletons gripping an invisible wheel, with steer and throttle meters"> | <img src="docs/screenshots/phone-driving.jpg" alt="Phone controller driving the ship"> |
+| **Fly with your bare hands** | **Or drive it from a phone** |
 
 <p align="center">
   <img src="docs/screenshots/mobile.jpg" alt="Mobile portrait layout with touch controls" width="22%">
@@ -140,7 +136,7 @@ Reach the glowing gate at the end of each road before your oxygen or fuel runs o
 | Restart | `R` | Y / Back | ⟲ |
 | Pause | `Esc` / `P` | Start | ❚❚ |
 | Toggle holographic ghost | `G` | X | 👻 |
-| Recentre the wand | `C` | — | — |
+| Recentre hand tracking | `C` | — | — |
 
 **Tips**
 
@@ -249,129 +245,61 @@ Works on the hosted site and locally.
 - **Use your own broker:** to avoid the public PeerJS broker, run a [PeerServer](https://github.com/peers/peerjs-server) and build with `VITE_PEER_HOST`, `VITE_PEER_PORT`, `VITE_PEER_PATH` and `VITE_PEER_SECURE`. In GitHub Actions you can set these as repository variables.
 - **Verbose connection logs:** add `?peerdebug` to either page's URL.
 
-## Wand controller: steer with a webcam
-
-> **Experimental.** It is a genuinely fun way to play and a poor way to set records. See [the honest limitations](#what-it-is-good-at-and-what-it-is-not) below.
-
-Print a two-colour marker, tape it to a pen, and fly the ship by waving it at your webcam.
-
-<p align="center">
-  <img src="docs/screenshots/wand-marker.jpg" alt="Printable marker sheet with a magenta and a cyan disc joined by a bar" width="60%">
-</p>
-
-| Gesture | Control |
-|---|---|
-| **Tilt** the wand like a steering wheel | Steer |
-| **Push** it towards the camera / **pull** it back | Accelerate / brake |
-| **Flick** it upwards | Jump |
-| `C`, or the **Recentre** button | Make the pose you are holding the new neutral |
-
-### Getting started
-
-1. Open **Wand Controller** on the title screen and hit **Print the marker** (or open [the marker sheet](https://abhas9.github.io/neon-roads/marker.html) directly). Print at 100% scale.
-2. Cut out the strip and tape it along a pen, a chopstick, a wooden spoon — anything straight you can hold in the middle.
-3. Back in the game, press **Enable camera** and allow access.
-4. Hold the wand level inside the dashed box and press **Calibrate**. Sampling takes about half a second.
-5. Tune steering range, throttle range and flick strength to taste, then **Play with the wand**.
-
-**No printer?** You do not need one. Calibration samples whatever you hold up, so two clearly different coloured objects on a stick work just as well — a green and an orange bottle cap, two sticky notes, two sweet wrappers. Avoid anything close to skin, wood or wall tones.
-
-**Your video never leaves your device.** Frames are processed in the page, nothing is recorded, and nothing is uploaded. Turning the wand off releases the camera.
-
-### How it works
-
-- **Two discs, not one.** The distance between the two centroids is a far steadier depth signal than one blob's area, which swings with partial occlusion and motion blur. The angle between them gives tilt for free.
-- **Tilt for steering, not hand position.** Tilting is wrist-only, so it is much less tiring than sweeping your arm, and a wand has a physical detent — you can feel level, and return to neutral without watching the screen.
-- **Normalised rg chromaticity, not hue.** Dividing out intensity means shading across the disc, a dimmed lamp or a cloud passing the window does not move a pixel out of its colour model. A fixed hue band falls apart under tungsten light or a backlit window.
-- **Calibrated, not hard-coded.** Whatever fills the left half of the box becomes one end of the wand and the right half the other, fitted as a Gaussian in chroma space. That is what makes home-printer ink, and improvised objects, work.
-- **Gated search.** Once locked, only a window around the previous frame is scanned. That is faster and stops a magenta cushion across the room from stealing the track; a miss falls back to a full-frame re-acquire.
-- **1€ filter.** Steering and throttle are smoothed by a [1€ filter](https://gery.casiez.net/1euro/), whose cutoff rises with speed: no jitter while you hold still, no lag when you move. The flick signal is deliberately left unfiltered.
-- **Cheap.** Tracking runs at 160x120 and costs about **0.4 ms per frame**, so it sits comfortably beside the bloom pipeline.
-- **Safe when it loses you.** Controls fade to neutral within 200 ms, and the run auto-pauses after half a second. Without that, reaching for a drink means the ship holds its heading into a wall — and campaign mode restarts instantly, over and over.
-
-> Building something similar? [`docs/SMART-CONTROLLERS.md`](docs/SMART-CONTROLLERS.md) is the playbook this was built to: signal selection, latency budgeting, runtime calibration, testing a camera controller without a camera, and the bugs to check for by name.
-
-### What it is good at, and what it is not
-
-Camera control costs roughly **100 ms of jump latency** you do not pay with a key: a webcam frame is already tens of milliseconds old when it arrives, and a flick must be seen before it can be recognised. At full speed a road row passes every 48 ms, so late worlds with tight jump timing are genuinely harder this way.
-
-So the wand is built to be played **alongside** the keyboard, not instead of it. Steering and throttle come from the wand while `Space` still jumps, and the pad and gamepad stay live too. Runs driven by the wand are tagged 🪄 on the shared scorecard.
-
-The setup screen shows tracking lock, camera frame rate, pipeline lag and CPU cost live, because how well this works depends entirely on the room you are in. If tracking sits below 90%, add light or pick more saturated colours.
-
-### Troubleshooting
-
-- **"Could not see the first/second disc":** more light, hold the wand closer, or keep the whole marker inside the box.
-- **"Both ends look like the same colour":** the two ends must be clearly different — not two shades of the same colour.
-- **Steering feels backwards:** turn on **Invert steering**, or recalibrate holding the wand the other way round.
-- **Drifting neutral:** hold the wand where it is comfortable and press `C`.
-- **Camera blocked:** allow camera access from the address bar, then press **Try again**.
-- **Jumps feel unreliable:** check the **Camera** readout. Tracking runs on `requestVideoFrameCallback`, so it follows the page's frame rate — below about 20 fps a flick can fall between two samples. Lower the graphics quality in Settings.
-- **Requires HTTPS:** browsers only grant camera access on secure origins. The hosted site and `localhost` are fine; a plain-HTTP LAN address is not.
-
 ## Hand controller: fly with your bare hands
 
-> **Experimental**, like the wand. Nothing to print and nothing to hold.
+> Experimental. Webcam only — nothing to print, nothing to hold.
 
-Hold both hands up as if you were gripping a steering wheel.
+Hold both hands up as if gripping a steering wheel.
 
 | Gesture | Control |
 |---|---|
-| **Turn the wheel** — one hand up, the other down | Steer |
-| **Raise or lower both hands** together | Accelerate / brake |
-| **Open either hand**, then close it again | Jump |
-| `C`, or the **Recentre** button | Set the resting height for the throttle |
+| Turn the wheel — one hand up, the other down | Steer |
+| Raise or lower both hands together | Accelerate / brake |
+| Open either hand, then close it again | Jump |
+| `C`, or **Recentre** | Set the resting height for the throttle |
 
-Open **Hand Controller** on the title screen, allow the camera, and play. Level hands already mean
-straight ahead, so steering needs no calibration at all. Your grip can stay relaxed — only a
-deliberate open hand counts as a jump.
+Open **Hand Controller** on the title screen and allow the camera. Level hands mean straight
+ahead, so steering needs no calibration. A relaxed grip counts as closed; only a deliberate open
+hand jumps. Sliders adjust steering range, throttle range and how open a hand must be, with live
+per-hand bars showing where the threshold sits.
 
-Steering range, throttle range and how open a hand must be all have sliders, with live bars
-showing exactly where your own hands cross the line.
+Video never leaves the device: frames are processed in the page, nothing is recorded or uploaded.
+Turning the controller off releases the camera.
 
-### How it works
+### Design
 
-- **Steering is measured between your hands, not from either one.** The angle of the line joining
-  your palms is self-correcting: shift in your seat and both hands move together, so the steering
-  does not budge. Absolute hand position drifts as your arm wanders; this does not.
-- **The two axes cannot interfere.** Steering is the *difference* in hand height and throttle is
-  their *mean*, which are independent by construction — you can turn without changing speed, or
-  speed up without turning. Both are tested.
-- **MediaPipe hand landmarks, not a colour tracker.** A skin-tone segmenter would have been far
-  smaller and needed no download, but it would work noticeably better for some skin tones and
-  lighting than others. A pre-trained landmark model is the fairer choice.
-- **Loaded only when you ask for it.** About 9 MB of runtime and weights, lazily fetched with a
-  progress bar the first time and cached after. Nobody who never opens this screen pays for it,
-  and the main bundle is unchanged. The files are served by the site itself rather than a CDN.
-- **Opening a hand beats waving for jumping.** It is a state change, not a velocity threshold, so
-  it needs no confirmation window: about **70 ms** of latency against the wand flick's ~100 ms.
-- **Hands are told apart by where they are, not by what the model calls them.** Handedness labels
-  assume a selfie-flipped image, and getting that assumption backwards silently swaps every
-  control. Position in the mirrored view is unambiguous; the label is only consulted for a lone
-  hand, and its meaning is learned from frames where both hands were visible.
-- **Steering reads the palm, not the fingers.** The position is averaged over the wrist and
-  knuckles, which barely move as the fingers curl, so opening a hand to jump does not yank the
-  steering with it.
-- **One open hand is one jump.** The simulation edge-triggers on jump, so the grip state is held
-  through a dropped detection frame rather than re-firing and double-jumping. Close the hand again
-  to arm the next one.
-- **Safe when it loses you.** With one hand visible steering falls away and your throttle is left
-  alone; with neither, controls fade to neutral and the run auto-pauses after half a second.
-- **Measured cost:** 6.7–9.6 ms per frame for inference and mapping on a laptop GPU, with the game
-  still rendering at 60 fps alongside it.
+- **Steering is the angle between the palms**, not either hand's position, so shifting in your
+  seat moves both hands together and leaves the steering unchanged.
+- **Steering is the difference in hand height; throttle is their mean.** The two axes are
+  independent by construction and cannot bleed into each other.
+- **Position is read from the palm** — averaged over wrist and knuckles — which barely moves as
+  fingers curl, so opening a hand to jump does not pull the steering with it.
+- **Opening a hand is a state change**, not a velocity threshold, so it needs no confirmation
+  window: ~70 ms of latency.
+- **One open hand is one jump.** The simulation edge-triggers, so grip state is held through a
+  dropped detection frame. Close the hand to arm the next jump.
+- **Hands are identified by mirrored screen position**, not by the model's handedness label, which
+  assumes a selfie-flipped image.
+- **MediaPipe landmarks rather than skin-tone segmentation**, which would work better for some
+  skin tones and lighting than others.
+- **Lazy-loaded**, ~9 MB of runtime and weights fetched with a progress bar on first use and
+  cached after. The main bundle is unchanged, and the files are served by the site itself.
+- **Fails safe.** With one hand visible, steering falls away and the throttle holds. With neither,
+  controls fade to neutral and the run auto-pauses after 0.5 s.
+- **Cost:** 7–10 ms per frame for inference and mapping on a laptop GPU, with the game still
+  rendering at 60 fps.
+
+Building something similar? [`docs/SMART-CONTROLLERS.md`](docs/SMART-CONTROLLERS.md) covers signal
+selection, latency budgeting, and how to test a camera controller without a camera.
 
 ### Troubleshooting
 
-- **"Show both hands to the camera":** steering needs both. Sit so both fit in frame at about
-  chest height.
-- **Jumps fire when you did not mean them, or not at all:** watch the *Left hand* and *Right hand*
-  bars and drag **Open sensitivity** so the marker sits between your relaxed grip and your open
-  hand.
-- **The ship creeps forward or back on its own:** hold your hands at a comfortable resting height
-  and press `C`.
-- **Only one camera controller at a time:** turning on the wand releases the camera from hand
-  tracking, and vice versa.
-- **Requires HTTPS:** as with the wand, browsers only grant camera access on secure origins.
+| Symptom | Fix |
+|---|---|
+| "Show both hands to the camera" | Steering needs both. Sit so both fit in frame at chest height. |
+| Jumps fire unintentionally, or not at all | Watch the per-hand bars and drag **Open sensitivity** so the marker sits between your relaxed grip and your open hand. |
+| The ship creeps forward or back | Rest your hands comfortably and press `C`. |
+| Camera blocked | Browsers grant camera access only on secure origins. The hosted site and `localhost` qualify; a plain-HTTP LAN address does not. |
 
 ## Run locally
 
@@ -413,13 +341,12 @@ src/
   game/         Run session (fixed-step loop, ghosts, death/finish flow), medals, scorecard and X post builder
   ui/           HUD, menu screens, on-screen touch controls
   net/          Phone-controller wire protocol and WebRTC host
-  camera/       Shared webcam lifecycle and frame loop for every camera controller
-  wand/         Camera wand: colour-blob tracker, calibration, pose mapping, camera runtime
+  camera/       Webcam lifecycle and frame loop
   hand/         Hand controller: landmark geometry, gesture mapping, MediaPipe runtime
   controller/   The phone controller page
   audio/        Synthesized sound effects and the procedural music sequencer
 tests/          Vitest unit tests
-tools/          Solver scripts and Playwright checks (screenshots, real-GPU render check, phone and wand end-to-end, contrast audit, synthetic webcam)
+tools/          Solver scripts and Playwright checks (screenshots, real-GPU render check, phone and hand end-to-end, contrast audit, synthetic webcam)
 docs/           Design research and plan, the smart-controller playbook, screenshots
 ```
 
@@ -453,16 +380,15 @@ The roads live in [`src/levels/roads/`](src/levels/roads). After editing, run `n
 
 | Command | Checks |
 |---|---|
-| `npm test` | Physics, collisions, tiles, gravity, boost, replay encoding determinism, solver, the wand tracker/filter/mapper against synthetic camera frames, and the hand geometry and mapper against synthetic skeletons |
+| `npm test` | Physics, collisions, tiles, gravity, boost, replay encoding determinism, solver, signal filtering, and hand geometry and gesture mapping against synthetic skeletons |
 | `npm run solve` | All 30 roads are beatable; updates par times |
 | `npm run solve:endless` | Windows of generated endless roads at several difficulty depths are beatable |
 | `npm run check:gpu` | Renders several worlds in installed Chrome on the real GPU and fails on black-outs or invalid bloom output (dev server must be running) |
 | `npm run e2e:phone` | Pairs a phone page with the game over real WebRTC, navigates menus and drives the ship (dev server must be running) |
-| `npm run e2e:wand` | Drives the camera wand end to end with a synthetic webcam (`canvas.captureStream` behind a stubbed `getUserMedia`): calibration, all three axes, the flick-to-jump gesture, steering the real ship, auto-pause on tracking loss, and calibration surviving a reload (dev server must be running) |
-| `npm run e2e:hand` | Drives the hand controller end to end with a synthetic webcam and a stubbed landmark model, so everything downstream of the model runs for real: hand assignment, both axes and their independence, a body shift not registering as a turn, open-hand-to-jump, one open hand staying one jump, steering the actual ship, auto-pause, and one camera controller releasing the other (dev server must be running) |
+| `npm run e2e:hand` | Drives the hand controller end to end with a synthetic webcam and a stubbed landmark model, so everything downstream of the model runs for real: hand assignment, both axes and their independence, a body shift not registering as a turn, open-hand-to-jump, one open hand staying one jump, steering the actual ship, and auto-pause on tracking loss (dev server must be running) |
 | `npm run perf:hand` | Loads the **real** MediaPipe model on the GPU and measures what it costs, including the in-game frame rate with and without it. This is the part `e2e:hand` deliberately stubs (dev server must be running) |
 | `npm run e2e:celebrate` | Finishes a road by replaying a solver run. Checks the fireworks, the results screen, the Share on X link and clipboard scorecard, the saved ghost, and that `G` toggles the hologram (dev server must be running) |
-| `npm run audit:contrast` | WCAG contrast audit of every visible text on 36 screens (menus, HUD over six worlds, results, mobile, phone controller, wand and hand setup). It measures each text box against what is actually rendered behind it, including the 3D scene, and fails below AA (4.5:1, or 3:1 for large text). Needs the dev server running |
+| `npm run audit:contrast` | WCAG contrast audit of every visible text on 33 screens (menus, HUD over six worlds, results, mobile, phone controller, hand-controller setup). It measures each text box against what is actually rendered behind it, including the 3D scene, and fails below AA (4.5:1, or 3:1 for large text). Needs the dev server running |
 | `npm run shots -- <dir>` | Screenshots of every world and the mobile layout |
 
 The Playwright checks use an installed Google Chrome. Software-rendered headless browsers can miss GPU driver bugs, and some operating-system firewalls block peer-to-peer traffic for Playwright's bundled Chromium.

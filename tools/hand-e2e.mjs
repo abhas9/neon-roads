@@ -32,8 +32,6 @@ await page.addInitScript(() => {
 await page.addInitScript(fakeCamera);
 await page.addInitScript(fakeHands);
 await page.goto(url);
-// The fake camera draws the wand marker by default; this controller does not want it in frame.
-await page.evaluate(() => window.__wand.set({ visible: false }));
 
 const hand = () => page.evaluate(() => window.__neonTest.hand());
 const ship = () => page.evaluate(() => window.__neonTest.ship());
@@ -170,22 +168,6 @@ check(Math.abs(lost.steer) < 0.001, 'controls fade to neutral when the hands van
 
 await setHands(GRIP);
 check(await until(() => window.__neonTest.hand().status === 'tracking', 'recovery', 8000), 'tracking recovers when the hands come back');
-
-// --- One camera at a time ---------------------------------------------------
-await page.keyboard.press('Escape');
-await page.waitForTimeout(300);
-await page.goto(url);
-await page.evaluate(() => window.__wand.set({ visible: true }));
-await page.click('[data-action=hand]');
-await page.click('[data-action=hand-enable]');
-const handsWereOn = await until(() => window.__neonTest.hand().ready, 'hands ready', 20000);
-check(handsWereOn, 'hand tracking is running before the wand is switched on');
-await page.click('[data-action=back]');
-await page.click('[data-action=wand]');
-await page.click('[data-action=wand-enable]');
-await page.waitForSelector('[data-action=wand-calibrate], [data-action=wand-recentre]', { timeout: 20000 });
-const handOff = await hand();
-check(handOff.state === 'off', 'turning on the wand releases the camera from hand tracking', handOff.state);
 
 await browser.close();
 log(failures ? `${failures} check(s) failed` : 'all checks passed');

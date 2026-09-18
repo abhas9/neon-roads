@@ -154,26 +154,6 @@ if (tapeInfo) {
   await ctx.close();
 }
 
-// Wand controller: the setup screen with a synthetic camera standing in for a webcam.
-{
-  const { ctx, page } = await desktop(unlocked);
-  await ctx.addInitScript(fakeCamera);
-  await page.goto(base);
-  await page.waitForTimeout(900);
-  await page.click('[data-action=wand]');
-  await page.waitForSelector('.wand-screen');
-  await page.click('[data-action=wand-enable]');
-  await page.waitForSelector('[data-action=wand-calibrate]', { timeout: 20000 });
-  await page.waitForTimeout(800);
-  await page.screenshot({ path: `${out}/wand-calibrate.jpg`, ...jpeg });
-  await page.click('[data-action=wand-calibrate]');
-  await page.waitForSelector('[data-action=wand-recentre]', { timeout: 20000 });
-  await page.evaluate(() => window.__wand.set({ angle: 0.45, half: 0.168 }));
-  await page.waitForTimeout(1200);
-  await page.screenshot({ path: `${out}/wand-tuning.jpg`, ...jpeg });
-  await ctx.close();
-}
-
 // Hand controller, with a synthetic detector so the shot needs no model download.
 {
   const { ctx, page } = await desktop(unlocked);
@@ -181,8 +161,7 @@ if (tapeInfo) {
   await ctx.addInitScript(fakeHands);
   await page.goto(base);
   await page.waitForTimeout(900);
-  await page.evaluate(() => window.__wand.set({ visible: false }));
-  await page.click('[data-action=hand]');
+    await page.click('[data-action=hand]');
   await page.waitForSelector('.hand-screen');
   await page.click('[data-action=hand-enable]');
   await page.waitForSelector('[data-action=hand-recentre]', { timeout: 20000 });
@@ -190,16 +169,6 @@ if (tapeInfo) {
   await page.evaluate(() => window.__hands.set({ right: { x: -0.24, y: -0.07, curl: 1 }, left: { x: 0.24, y: 0.07, curl: 0 } }));
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${out}/hand-tuning.jpg`, ...jpeg });
-  await ctx.close();
-}
-
-// The printable marker sheet.
-{
-  const ctx = await browser.newContext({ viewport: { width: 1000, height: 660 } });
-  const page = await ctx.newPage();
-  await page.goto(`${base}marker.html`);
-  await page.waitForTimeout(600);
-  await page.screenshot({ path: `${out}/wand-marker.jpg`, ...jpeg });
   await ctx.close();
 }
 
