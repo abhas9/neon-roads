@@ -315,6 +315,17 @@ describe('hand mapper', () => {
     expect(m.status).toBe('lost');
   });
 
+  it('forgets a stale neutral on reset, so a new session re-zeroes', () => {
+    const m = new HandMapper();
+    // Calibrated with the hand held well off to one side.
+    settle(m, pair({ x: -0.40 }, {}), 20);
+    expect(Math.abs(m.out.steer)).toBeLessThan(0.05);
+    m.reset();
+    // Coming back with the hand in the middle must read as neutral, not as a hard turn.
+    settle(m, neutralPair(), 20);
+    expect(Math.abs(m.out.steer)).toBeLessThan(0.05);
+  });
+
   it('recovers when the hands come back', () => {
     const m = fresh();
     for (let i = 0; i < 30; i++) m.update(pair(null, null), dt);

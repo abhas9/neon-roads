@@ -35,7 +35,25 @@ kbd {
 .screens[data-screen='playing'] .screen { pointer-events: none; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-.title-screen { background: radial-gradient(ellipse 60% 55% at 50% 62%, rgba(7,2,26,.55), transparent 75%), linear-gradient(180deg, rgba(7,2,26,.6), rgba(7,2,26,.2) 40%, rgba(7,2,26,.7)); gap: 5vh; }
+.title-screen { background: radial-gradient(ellipse 60% 55% at 50% 62%, rgba(7,2,26,.55), transparent 75%), linear-gradient(180deg, rgba(7,2,26,.6), rgba(7,2,26,.2) 40%, rgba(7,2,26,.7)); gap: clamp(14px, 5vh, 56px); }
+/*
+ * The title menu grows every time a controller is added, and the footer hint is positioned
+ * absolutely, so a menu that outgrows the window silently slides underneath it and swallows
+ * clicks. Tighten with available height instead of assuming a fixed number of entries.
+ */
+@media (max-height: 900px) {
+  .title-screen .btn { padding: 10px 18px; font-size: 14px; }
+  .title-screen .btn small { font-size: 13px; }
+  .title-screen .menu { gap: 7px; }
+}
+@media (max-height: 780px) {
+  .title-screen .btn { padding: 7px 16px; font-size: 13px; }
+  .title-screen .btn small { font-size: 12px; }
+  .title-screen .menu { gap: 5px; }
+  .title-screen .logo-sub { font-size: 13px; }
+  /* The logo is sized from viewport width; in a short, wide window that alone fills the screen. */
+  .title-screen .logo-main { font-size: min(clamp(40px, 9vw, 120px), 13vh); }
+}
 .logo { text-align: center; }
 .logo-main {
   font-family: var(--display); font-weight: 900; font-size: clamp(44px, 9vw, 120px); letter-spacing: .06em; line-height: 1; position: relative;
@@ -397,3 +415,16 @@ input[type=range] { width: 180px; accent-color: var(--pink); }
 .hand-screen .wand-side .actions .btn { padding: 9px 14px; font-size: 13px; }
 .hand-screen .wand-side > .setting { padding: 6px 0; }
 .hand-screen .wand-side .seg { flex-wrap: wrap; }
+.jump-pill {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  font-family: var(--display); font-size: 10px; font-style: normal; letter-spacing: .14em;
+  padding: 2px 6px; border-radius: 2px; background: #140a2e; color: var(--dim);
+}
+.jump-pill.on { background: #7dff9b; color: #04120a; opacity: 1; box-shadow: 0 0 10px rgba(125,255,155,.8); }
+.hand-screen .wand-slider { padding: 2px 0; margin-bottom: 0; }
+.hand-screen .wand-slider small { font-size: 11px; }
+.hand-screen .wand-axes { gap: 7px; margin-bottom: 10px; }
+.hand-screen .wand-diag { margin: 10px 0; }
+.hand-screen .wand-side > p.small:last-child { margin-bottom: 0; }
+.hand-load.failed .hand-load-bar i { background: #ff6b5c; }
+.hand-load.failed .hand-load-text { color: #ffb3a8; text-transform: none; letter-spacing: 0; font-size: 13px; }

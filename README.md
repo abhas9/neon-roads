@@ -30,6 +30,7 @@ It's a tribute to **SkyRoads**, the 1993 DOS classic by BlueMoon Software.
 - [Victory celebration and Share on X](#victory-celebration-and-share-on-x)
 - [Use your phone as a controller](#use-your-phone-as-a-controller)
 - [Wand controller: steer with a webcam](#wand-controller-steer-with-a-webcam)
+- [Hand controller: fly with your bare hands](#hand-controller-fly-with-your-bare-hands)
 - [Run locally](#run-locally)
 - [Deploy to GitHub Pages](#deploy-to-github-pages)
 - [Project structure](#project-structure)
@@ -94,6 +95,7 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 - 🚀 **Boost overdrive:** boost pads push you past top speed, which makes boost-then-jump a skill of its own.
 - 📱 **Phone as controller:** scan a QR code and your phone becomes a wireless gamepad over peer-to-peer WebRTC.
 - 🪄 **Wand controller (experimental):** print a two-colour marker, tape it to a pen, and steer with your webcam — tilt to turn, push to accelerate, flick to jump. All tracking happens in the page; no video leaves your device. See [Wand controller](#wand-controller-steer-with-a-webcam).
+- 🖐 **Hand controller (experimental):** nothing to print and nothing to hold — wave one hand to steer and throttle, make a fist with the other to jump. See [Hand controller](#hand-controller-fly-with-your-bare-hands).
 - 🎮 **Input:** keyboard (with analog steering ramp), gamepad (analog stick and triggers), and on-screen touch controls.
 - 👓 **Readable over any world:** every screen passes a WCAG AA contrast audit. Menu, HUD and label text sits on frosted backplates, so it stays legible over bright suns, moons and floors.
 - ♿ **Colour-independent tiles:** every special tile also has an animated pattern (plus sign, chevrons, dots, stripes, hazard bars), so you don't need to tell colours apart. Also optional jump assist and a reduced-motion setting.
@@ -119,6 +121,8 @@ If you have never played the original, it is well worth seeking out. Fan-made ed
 | **Pair a phone with a QR code** | **The phone becomes the gamepad** |
 | <img src="docs/screenshots/wand-calibrate.jpg" alt="Wand controller calibration screen with a live camera preview and the marker inside a dashed box"> | <img src="docs/screenshots/wand-tuning.jpg" alt="Wand controller tuning screen with steer and throttle meters, tracking diagnostics and sensitivity sliders"> |
 | **Calibrate a paper wand on camera** | **Live axes, tracking and latency readouts** |
+| <img src="docs/screenshots/hand-tuning.jpg" alt="Hand controller screen showing two tracked hand skeletons, steer and throttle meters and a lit JUMP indicator"> | <img src="docs/screenshots/wand-marker.jpg" alt="Printable marker sheet with a magenta and a cyan disc"> |
+| **Fly with your bare hands** | **Print a wand in one page** |
 
 <p align="center">
   <img src="docs/screenshots/mobile.jpg" alt="Mobile portrait layout with touch controls" width="22%">
@@ -305,6 +309,61 @@ The setup screen shows tracking lock, camera frame rate, pipeline lag and CPU co
 - **Jumps feel unreliable:** check the **Camera** readout. Tracking runs on `requestVideoFrameCallback`, so it follows the page's frame rate — below about 20 fps a flick can fall between two samples. Lower the graphics quality in Settings.
 - **Requires HTTPS:** browsers only grant camera access on secure origins. The hosted site and `localhost` are fine; a plain-HTTP LAN address is not.
 
+## Hand controller: fly with your bare hands
+
+> **Experimental**, like the wand. Nothing to print and nothing to hold.
+
+| Hand | Gesture | Control |
+|---|---|---|
+| **Right** | move left and right | Steer |
+| **Right** | raise and lower | Accelerate / brake |
+| **Left** | make a **fist** | Jump (open the hand to reset) |
+| either | `C`, or the **Recentre** button | Make the pose you are holding the new neutral |
+
+Open **Hand Controller** on the title screen, allow the camera, and play. There is no calibration
+step: the first hands seen become the neutral pose, and **Recentre** moves it whenever you like.
+
+**Settings.** *Left-handed* swaps the roles so the left hand flies and the right one jumps.
+*Split hands* gives each hand one job instead — one steers, the other throttles and jumps —
+which some people find easier to coordinate. Steering range, throttle range and fist sensitivity
+are all adjustable, with a live openness bar showing exactly where your fist crosses the line.
+
+### How it works
+
+- **MediaPipe hand landmarks, not a colour tracker.** A skin-tone segmenter would have been far
+  smaller and needed no download, but it would work noticeably better for some skin tones and
+  lighting than others. A pre-trained landmark model is the fairer choice.
+- **Loaded only when you ask for it.** About 9 MB of runtime and weights, lazily fetched with a
+  progress bar the first time and cached after. Nobody who never opens this screen pays for it,
+  and the main bundle is unchanged. The files are served by the site itself rather than a CDN.
+- **A fist beats a wave for jumping.** A fist is a state change, not a velocity threshold, so it
+  needs no confirmation window: about **70 ms** of latency against the wand flick's ~100 ms.
+- **Hands are told apart by where they are, not by what the model calls them.** Handedness labels
+  assume a selfie-flipped image, and getting that assumption backwards silently swaps every
+  control. Position in the mirrored view is unambiguous; the label is only consulted for a lone
+  hand, and its meaning is learned from frames where both hands were visible.
+- **Steering reads the palm, not the fingers.** The position is averaged over the wrist and
+  knuckles, which barely move when the fingers curl, so making a fist does not drag the steering
+  with it.
+- **One fist is one jump.** The simulation edge-triggers on jump, so the fist state is held
+  through a dropped detection frame rather than re-firing and double-jumping.
+- **Safe when it loses you.** Controls fade to neutral and the run auto-pauses after half a
+  second, exactly as the wand does.
+- **Measured cost:** 6.7 ms per frame for inference and mapping on a laptop GPU, with the game
+  still rendering at 60 fps alongside it.
+
+### Troubleshooting
+
+- **"Show both hands to the camera":** the flying hand is not visible. Sit so both hands fit in
+  frame at about chest height.
+- **Jumps fire too easily, or not at all:** watch the *Fist hand* bar and drag **Fist
+  sensitivity** so the marker sits between your open hand and your fist.
+- **Steering feels reversed:** you may be flying with the wrong hand — try **Left-handed**.
+- **The ship drifts:** hold your hands comfortably and press `C`.
+- **Only one camera controller at a time:** turning on the wand releases the camera from hand
+  tracking, and vice versa.
+- **Requires HTTPS:** as with the wand, browsers only grant camera access on secure origins.
+
 ## Run locally
 
 Requires Node.js 20.19+ or 22.12+.
@@ -345,7 +404,9 @@ src/
   game/         Run session (fixed-step loop, ghosts, death/finish flow), medals, scorecard and X post builder
   ui/           HUD, menu screens, on-screen touch controls
   net/          Phone-controller wire protocol and WebRTC host
-  wand/         Camera wand: colour-blob tracker, calibration, 1 euro filter and flick detector, pose mapping, camera runtime
+  camera/       Shared webcam lifecycle and frame loop for every camera controller
+  wand/         Camera wand: colour-blob tracker, calibration, pose mapping, camera runtime
+  hand/         Hand controller: landmark geometry, gesture mapping, MediaPipe runtime
   controller/   The phone controller page
   audio/        Synthesized sound effects and the procedural music sequencer
 tests/          Vitest unit tests
@@ -383,14 +444,16 @@ The roads live in [`src/levels/roads/`](src/levels/roads). After editing, run `n
 
 | Command | Checks |
 |---|---|
-| `npm test` | Physics, collisions, tiles, gravity, boost, replay encoding determinism, solver, and the wand tracker/filter/mapper against synthetic camera frames |
+| `npm test` | Physics, collisions, tiles, gravity, boost, replay encoding determinism, solver, the wand tracker/filter/mapper against synthetic camera frames, and the hand geometry and mapper against synthetic skeletons |
 | `npm run solve` | All 30 roads are beatable; updates par times |
 | `npm run solve:endless` | Windows of generated endless roads at several difficulty depths are beatable |
 | `npm run check:gpu` | Renders several worlds in installed Chrome on the real GPU and fails on black-outs or invalid bloom output (dev server must be running) |
 | `npm run e2e:phone` | Pairs a phone page with the game over real WebRTC, navigates menus and drives the ship (dev server must be running) |
 | `npm run e2e:wand` | Drives the camera wand end to end with a synthetic webcam (`canvas.captureStream` behind a stubbed `getUserMedia`): calibration, all three axes, the flick-to-jump gesture, steering the real ship, auto-pause on tracking loss, and calibration surviving a reload (dev server must be running) |
+| `npm run e2e:hand` | Drives the hand controller end to end with a synthetic webcam and a stubbed landmark model, so everything downstream of the model runs for real: hand assignment, both axes, fist-to-jump, one fist staying one jump, steering the actual ship, auto-pause, and one camera controller releasing the other (dev server must be running) |
+| `npm run perf:hand` | Loads the **real** MediaPipe model on the GPU and measures what it costs, including the in-game frame rate with and without it. This is the part `e2e:hand` deliberately stubs (dev server must be running) |
 | `npm run e2e:celebrate` | Finishes a road by replaying a solver run. Checks the fireworks, the results screen, the Share on X link and clipboard scorecard, the saved ghost, and that `G` toggles the hologram (dev server must be running) |
-| `npm run audit:contrast` | WCAG contrast audit of every visible text on 34 screens (menus, HUD over six worlds, results, mobile, phone controller, wand setup). It measures each text box against what is actually rendered behind it, including the 3D scene, and fails below AA (4.5:1, or 3:1 for large text). Needs the dev server running |
+| `npm run audit:contrast` | WCAG contrast audit of every visible text on 36 screens (menus, HUD over six worlds, results, mobile, phone controller, wand and hand setup). It measures each text box against what is actually rendered behind it, including the 3D scene, and fails below AA (4.5:1, or 3:1 for large text). Needs the dev server running |
 | `npm run shots -- <dir>` | Screenshots of every world and the mobile layout |
 
 The Playwright checks use an installed Google Chrome. Software-rendered headless browsers can miss GPU driver bugs, and some operating-system firewalls block peer-to-peer traffic for Playwright's bundled Chromium.

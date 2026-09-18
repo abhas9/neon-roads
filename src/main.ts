@@ -159,9 +159,9 @@ class App {
 
   private handLabel(): string {
     if (this.hand.ready) return 'tracking';
-    if (this.hand.state === 'ready') return 'loading tracking…';
+    if (this.hand.state === 'ready') return 'loading…';
     if (this.hand.state === 'denied') return 'camera blocked';
-    return 'fist and wave, nothing to hold';
+    return 'nothing to hold';
   }
 
   private wandLabel(): string {

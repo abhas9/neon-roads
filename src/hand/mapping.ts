@@ -76,6 +76,9 @@ export class HandMapper {
     this.seen = false;
     this.fist = false;
     this.fistMissing = 0;
+    // A stale neutral from a previous session would silently bias the steering of the next one,
+    // so the first hands seen after a restart become neutral again.
+    this.hasNeutral = false;
     this.steerF.reset();
     this.throttleF.reset();
   }
@@ -161,6 +164,7 @@ export class HandMapper {
       // Hysteresis: close on a firm fist, release only once the hand is clearly open again.
       if (this.fist ? jump.open > t.fistThreshold + FIST_HYSTERESIS : jump.open < t.fistThreshold) {
         this.fist = !this.fist;
+        this.fistMissing = 0;
       }
     } else {
       this.releaseFist(dt);

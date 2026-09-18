@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright';
 import { fakeCamera } from './fake-camera.mjs';
+import { fakeHands } from './fake-hands.mjs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5287/';
 const tapeInfo = process.argv[3] ? JSON.parse(readFileSync(process.argv[3], 'utf8')) : null;
@@ -171,6 +172,23 @@ const desktop = async (roads = progress, extraInit = null, settings = {}) => {
   await page.waitForFunction(() => document.querySelector('.hud-timer')?.textContent !== '00:00.00', null, { timeout: 15000 });
   await page.waitForTimeout(600);
   await audit(page, 'HUD with wand chip');
+  await ctx.close();
+}
+{
+  // Hand controller, with the landmark model stubbed so the audit needs no 9MB download.
+  const { ctx, page } = await desktop();
+  await ctx.addInitScript(fakeCamera);
+  await ctx.addInitScript(fakeHands);
+  await page.goto(base);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => window.__wand.set({ visible: false }));
+  await page.click('[data-action=hand]');
+  await page.waitForSelector('.hand-screen');
+  await audit(page, 'Hand intro');
+  await page.click('[data-action=hand-enable]');
+  await page.waitForSelector('[data-action=hand-recentre]', { timeout: 20000 });
+  await page.waitForTimeout(900);
+  await audit(page, 'Hand tuning and diagnostics');
   await ctx.close();
 }
 {

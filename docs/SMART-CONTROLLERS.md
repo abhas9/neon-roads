@@ -1,7 +1,11 @@
 # Building smart controllers
 
-Notes from building the **camera wand** in this repo (`src/wand/`): a printed two-colour marker
-on a stick, tracked by webcam, driving a 120 Hz deterministic game.
+Notes from building two camera controllers in this repo: the **wand** (`src/wand/`), a printed
+two-colour marker on a stick, and the **hand controller** (`src/hand/`), bare-handed MediaPipe
+landmark tracking. Both drive a 120 Hz deterministic game.
+
+§13 was written as a prediction before the second controller existed, then rewritten with what
+actually happened. Where the two differ is marked.
 
 This is written for whoever builds the next one — hand tracking, pose, face, voice, phone IMU.
 It is a playbook, not a retrospective. Most of it is about the parts that are *not* the clever
@@ -394,49 +398,96 @@ Verification
 
 ---
 
-## 13. Notes for a hand / pose controller
+## 13. What happened on the second controller
 
-The next controller will probably drop the marker. What carries over and what does not:
+§13 was originally a set of predictions for a hand controller. It has since been built. The
+predictions and the measurements:
 
-**Carries over unchanged:** the pure/shell split, the synthetic-camera e2e harness
-(`tools/fake-camera.mjs` — swap the drawing function), the latency budget, 1€ filtering, onset
-gesture detection, auto-pause on loss, the diagnostics panel, "do not touch the sim".
+| Prediction | Outcome |
+|---|---|
+| ML inference costs ~5–15 ms/frame vs the wand's 0.4 ms | **6.7 ms measured** on a laptop GPU, with the game still rendering at 60 fps. No worker offload needed — but this was *measured before deciding*, not assumed. |
+| A pinch or fist beats a flick for jumping | **Confirmed.** A fist is a state change, so it needs no confirmation window at all: ~70 ms against the wand's ~100 ms. The whole frame-rate trap in §7 simply does not apply. |
+| A synthetic cartoon hand will not trip a real landmark model | **Confirmed**, and the fix is below. |
+| No calibration needed | **Confirmed** for detection, but a *neutral pose* step is still needed, and the fist threshold has to be tunable — see below. |
 
-**What changes:**
+### Stub the model's output, not its input
 
-- **Cost.** MediaPipe Hands / Tasks Vision runs ~5–15 ms per frame versus ~0.4 ms here, plus a
-  WASM and model download. That is a real budget change next to this renderer. Measure before
-  committing; consider a Web Worker with `OffscreenCanvas`, which the current design does not
-  need.
-- **No calibration needed** for detection — the model is pre-trained. But you still need a
-  **neutral pose** step, and you gain a new failure mode the wand did not have: the detector
-  works on some hands, skin tones and lighting better than others. Test that explicitly, and keep
-  the tracking-quality readout.
-- **A richer signal set.** Landmarks give joint angles, pinch distance, hand orientation and
-  handedness. Apply §2 to rank them — do not use all of them because they are there.
-- **Pinch is a better jump than a flick.** It is a near-instant state change rather than a
-  velocity threshold, so it avoids the confirmation-window problem in §7 entirely. It is probably
-  the single biggest latency win available.
-- **Occlusion and self-occlusion** replace colour failure as the dominant loss mode. Your
-  synthetic frames must include a hand leaving the frame and fingers crossing.
-- **Two hands** invite a mapping where one steers and one throttles. Watch fatigue (§2.3) and
-  watch what happens when only one is detected — that is a partial-loss state the wand never had,
-  and it needs a defined behaviour, not a crash.
+This is the technique that made the hand controller testable. Do not try to fake pixels an ML
+model will accept. Instead put a seam where the model's *results* enter your code:
 
-**Be suspicious of a synthetic e2e for an ML detector.** Drawing a cartoon hand will not reliably
-trip a real landmark model. Expect to need a short recorded clip as a fixture
-(`--use-file-for-fake-video-capture` takes y4m), or to test the mapping layer against recorded
-*landmark* streams rather than pixels — which is a good argument for making the landmark→input
-mapping its own pure module with a well-defined input type.
+```ts
+// handInput.ts — the seam the test replaces
+const stub = window.__neonHandStub;
+if (stub) { this.detector = stub; return; }
+```
 
----
+The test injects landmark skeletons directly. Everything downstream — hand assignment, geometry,
+filtering, the mapper, `Input`, the simulation, the UI — then runs for real, and CI never
+downloads 9 MB of weights. 25 end-to-end checks run in seconds.
+
+**But be honest about what the stub hides.** It bypasses the dynamic import, the asset paths, the
+wasm resolver, `createFromOptions` and `detectForVideo` — the entire real integration. So pair it
+with a second, smaller check that loads the genuine model on a real GPU (`tools/hand-perf.mjs`)
+and answers the questions the stub cannot: does the real path work, what does it cost, and does
+the game still hit its frame rate with it running. That check found the honest performance number
+quoted above, and it is the only thing verifying the build-time asset staging.
+
+### Shipping an ML model
+
+- **Lazy-load it.** A dynamic `import()` keeps the runtime out of the main bundle — here it
+  becomes a 45 KB gzipped chunk fetched only when the screen opens.
+- **Serve it yourself.** The wasm and weights are staged into the site at build time
+  (`tools/fetch-mediapipe.mjs`), gitignored rather than committed. A CDN dependency at runtime is
+  a feature that silently breaks one day.
+- **Show real progress.** Stream the weights with a `ReadableStream` reader and pass the bytes as
+  `modelAssetBuffer`, rather than handing the library a URL and having nothing to show for eight
+  seconds.
+
+### Landmark-specific traps
+
+- **Handedness labels assume a selfie-flipped image.** Trusting them on an unflipped feed silently
+  swaps every control. Assign hands by **mirrored screen position** instead — unambiguous whenever
+  two hands are visible — and use the label only for a lone hand, learning what it means from
+  frames where both were visible. The test stub deliberately reproduces the inverted convention,
+  because that is the bug worth catching.
+- **Pick a landmark that does not move with the gesture.** Steering reads the palm centre averaged
+  over the wrist and knuckles. A centroid of all 21 points lurches sideways every time the fingers
+  curl, so making a fist would drag the steering with it. There is a test comparing the two.
+- **Derive gestures from ratios, not pixels.** Finger extension is measured from the wrist and
+  divided by hand size, which makes it invariant to distance from the camera and to hand rotation.
+  All four invariances are tests.
+- **A held state must survive a dropped frame.** The simulation edge-triggers on jump, so one
+  fist flickering for a single frame reads as two jumps. Hold the state through brief detection
+  gaps, and test it by dropping exactly one frame mid-gesture.
+- **The gesture threshold is not knowable in advance.** Hands differ. Ship a live openness bar
+  with the threshold marked on it and a slider, so the player can see and set where their own
+  fist crosses the line. Guessing a constant would have been wrong for somebody.
+
+### Fairness is a design constraint, not a nicety
+
+The cheap implementation of a hand controller is skin-tone segmentation: no download, a few
+hundred lines, and it would have reused the wand's colour tracker almost unchanged. It was
+rejected because it would work measurably better for some skin tones and lighting than others.
+A pre-trained landmark model costs 9 MB and 6.7 ms a frame, and that is the price of the feature
+working for everybody. Make this call explicitly and write down why.
+
+### Build the second controller's foundations before the second controller
+
+The camera lifecycle was extracted into `src/camera/source.ts` *before* the hand controller was
+written, not after. Copying it would have copied all four lifecycle bugs from §10 verbatim — they
+live entirely in that layer. The existing end-to-end check made the refactor safe to do: extract,
+run the first controller's 25 checks, then build on it.
+
+Related: **two camera controllers cannot share one webcam**, and trying is not worth it. Enforce
+mutual exclusion — switching one on releases the other — and make that an end-to-end check.
 
 ## 14. What this process does not cover
 
-The wand was verified against synthetic frames and a synthetic camera. Real sensor noise, rolling
-shutter, auto-exposure hunting and actual room lighting were **not** covered by any automated
-check, and cannot be. That gap was stated to the user rather than papered over, and playtesting
-closed it.
+Both controllers were verified against synthetic frames, a synthetic camera and — for the hand
+controller — synthetic landmarks. Real sensor noise, rolling shutter, auto-exposure hunting,
+actual room lighting, and whether a real model recognises *your* hands were **not** covered by any
+automated check, and cannot be. Those gaps were stated to the user rather than papered over, and
+playtesting closed them.
 
 Plan for the same: automated tests buy you correctness of logic and freedom from regressions.
 They do not tell you whether it feels good. Budget a real playtest, and make sure the diagnostics

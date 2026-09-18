@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright';
 import { fakeCamera } from './fake-camera.mjs';
+import { fakeHands } from './fake-hands.mjs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5287/';
 const tapeInfo = process.argv[3] ? JSON.parse(readFileSync(process.argv[3], 'utf8')) : null;
@@ -170,6 +171,24 @@ if (tapeInfo) {
   await page.evaluate(() => window.__wand.set({ angle: 0.45, half: 0.168 }));
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${out}/wand-tuning.jpg`, ...jpeg });
+  await ctx.close();
+}
+
+// Hand controller, with a synthetic detector so the shot needs no model download.
+{
+  const { ctx, page } = await desktop(unlocked);
+  await ctx.addInitScript(fakeCamera);
+  await ctx.addInitScript(fakeHands);
+  await page.goto(base);
+  await page.waitForTimeout(900);
+  await page.evaluate(() => window.__wand.set({ visible: false }));
+  await page.click('[data-action=hand]');
+  await page.waitForSelector('.hand-screen');
+  await page.click('[data-action=hand-enable]');
+  await page.waitForSelector('[data-action=hand-recentre]', { timeout: 20000 });
+  await page.evaluate(() => window.__hands.set({ right: { x: -0.33, y: 0.09 }, left: { curl: 1 } }));
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${out}/hand-tuning.jpg`, ...jpeg });
   await ctx.close();
 }
 

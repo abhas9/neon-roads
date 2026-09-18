@@ -111,7 +111,7 @@ export class HandScreen {
               <span>Steer<div class="wand-bar steer"><i></i></div></span>
               <span>Throttle<div class="wand-bar throttle"><i></i></div></span>
               <span>Fly hand<div class="wand-bar open fly"><i></i><b class="mark"></b></div></span>
-              <span>Fist hand<div class="wand-bar open jump"><i></i><b class="mark"></b></div></span>
+              <span>Fist hand<div class="wand-bar open jump"><i></i><b class="mark"></b><em class="jump-pill">JUMP</em></div></span>
             </div>
             <div class="wand-diag">
               <span>Hands<b class="v-hands">–</b></span>
@@ -120,11 +120,11 @@ export class HandScreen {
               <span>CPU<b class="v-cost">–</b></span>
             </div>
           </div>
-          ${slider('handSteerRange', 'Steering range', 0.08, 0.32, 0.01, 'How far you move for a full turn. Lower is twitchier.')}
+          ${slider('handSteerRange', 'Steering range', 0.08, 0.32, 0.01, 'How far you move for a full turn.')}
           ${slider('handThrottleRange', 'Throttle range', 0.08, 0.32, 0.01, 'How far you raise or lower for full speed.')}
-          ${slider('handFist', 'Fist sensitivity', 0.15, 0.6, 0.01, 'Watch the Fist hand bar: the marker is where a jump fires.')}
-          <label class="nav setting toggle" tabindex="0" data-toggle="handSwap"><span><b>Left-handed</b><small>Left hand flies, right hand jumps.</small></span><i class="switch ${s.handSwap ? 'on' : ''}"></i></label>
-          <div class="setting"><span><b>Hand roles</b><small>Split gives each hand one job.</small></span><div class="seg">
+          ${slider('handFist', 'Fist sensitivity', 0.15, 0.6, 0.01, 'The marker on the Fist hand bar is where a jump fires.')}
+          <label class="nav setting toggle" tabindex="0" data-toggle="handSwap"><span><b>Left-handed</b><small>Left hand flies, right jumps.</small></span><i class="switch ${s.handSwap ? 'on' : ''}"></i></label>
+          <div class="setting"><span><b>Hand roles</b></span><div class="seg">
             <button class="nav ${s.handMode === 'joystick' ? 'on' : ''}" data-select="handMode" data-value="joystick">One hand flies</button>
             <button class="nav ${s.handMode === 'split' ? 'on' : ''}" data-select="handMode" data-value="split">Split hands</button>
           </div></div>
@@ -133,7 +133,7 @@ export class HandScreen {
             <button class="nav btn ghost" data-action="hand-recentre">Recentre <kbd>C</kbd></button>
             <button class="nav btn ghost" data-action="hand-off">Turn off</button>
           </div>
-          <p class="dim small">Hold your hands where they feel comfortable and hit <b>Recentre</b> to make that the neutral pose. Jump with <kbd>Space</kbd> any time — a fist is around 70 ms slower than a key press.</p>`;
+          <p class="dim small">Hold your hands comfortably and hit <b>Recentre</b> to set neutral. <kbd>Space</kbd> still jumps.</p>`;
       }
     }
   }
@@ -237,13 +237,20 @@ export class HandScreen {
     if (!root || this.step !== 'live') return;
     const load = root.querySelector<HTMLElement>('.hand-load');
     if (load) {
-      const loading = this.hand.modelState === 'loading' || this.hand.modelState === 'idle';
-      load.classList.toggle('hidden', !loading);
-      if (loading) {
+      const state = this.hand.modelState;
+      // A failed model load must say so: hiding the bar would leave a live preview that simply
+      // never tracks anything, with nothing on screen to explain why.
+      const show = state !== 'ready';
+      load.classList.toggle('hidden', !show);
+      load.classList.toggle('failed', state === 'error');
+      if (show) {
         const bar = load.querySelector<HTMLElement>('.hand-load-bar i');
-        if (bar) bar.style.width = `${Math.round(this.hand.progress * 100)}%`;
+        if (bar) bar.style.width = state === 'error' ? '100%' : `${Math.round(this.hand.progress * 100)}%`;
         const text = load.querySelector('.hand-load-text');
-        if (text) text.textContent = `Loading hand tracking… ${Math.round(this.hand.progress * 100)}%`;
+        if (text) {
+          text.textContent =
+            state === 'error' ? this.hand.error || 'Hand tracking failed to load.' : `Loading hand tracking… ${Math.round(this.hand.progress * 100)}%`;
+        }
       }
     }
     const m = this.hand.mapper;
@@ -268,8 +275,9 @@ export class HandScreen {
     if (mark) mark.style.left = `${this.settings().handFist * 100}%`;
     const flyMark = root.querySelector<HTMLElement>('.wand-bar.open.fly .mark');
     if (flyMark) flyMark.style.left = `${this.settings().handFist * 100}%`;
-    const jumpBar = root.querySelector<HTMLElement>('.wand-bar.open.jump i');
-    if (jumpBar) jumpBar.style.background = m.out.jump ? '#7dff9b' : '';
+    // A tight fist drives the openness bar to zero width, which is exactly when the player most
+    // needs to see that the jump fired, so the state gets its own indicator.
+    root.querySelector('.jump-pill')?.classList.toggle('on', m.out.jump);
 
     const set = (sel: string, text: string, cls = '') => {
       const el = root.querySelector(sel);

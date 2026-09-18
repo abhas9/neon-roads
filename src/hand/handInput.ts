@@ -128,6 +128,12 @@ export class HandInput {
         runningMode: 'VIDEO',
         numHands: 2,
       });
+      // The player may have switched the controller off while the model was still loading.
+      if (this.camera.state !== 'ready') {
+        landmarker.close();
+        this.modelState = 'idle';
+        return false;
+      }
       this.detector = {
         detect: (video, ts) => {
           const res = landmarker.detectForVideo(video, ts);
