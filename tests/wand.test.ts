@@ -3,7 +3,7 @@ import { CalibrationSampler } from '../src/wand/calibrate';
 import type { CalibrationError } from '../src/wand/calibrate';
 import { detect, gateFor, saturationOf } from '../src/wand/tracker';
 import type { WandModel } from '../src/wand/tracker';
-import { FlickDetector, OneEuro, shapeAxis, wrapPi } from '../src/wand/filter';
+import { FlickDetector, OneEuro, shapeAxis, wrapPi } from '../src/core/filter';
 import { DEFAULT_TUNING, WandMapper, neutralFrom, poseFrom } from '../src/wand/mapping';
 
 const W = 160;

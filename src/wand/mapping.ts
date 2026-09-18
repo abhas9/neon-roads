@@ -1,7 +1,7 @@
 /** Turns tracked discs into a game InputFrame. Pure and stateful-but-DOM-free, so it unit-tests. */
 import type { InputFrame } from '../sim/types';
 import type { Blob } from './tracker';
-import { FlickDetector, OneEuro, shapeAxis, wrapPi } from './filter';
+import { FlickDetector, OneEuro, shapeAxis, wrapPi } from '../core/filter';
 
 export interface WandPose {
   /** Angle of the A->B vector, radians, 0 = level with B to the right. */

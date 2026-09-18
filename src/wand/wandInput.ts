@@ -10,15 +10,16 @@ import { detect, gateFor } from './tracker';
 import type { Blob, Gate, WandModel } from './tracker';
 import { WandMapper, poseFrom } from './mapping';
 import type { WandPose } from './mapping';
+import { CameraSource } from '../camera/source';
+import type { CameraState } from '../camera/source';
 
-export type WandState = 'off' | 'starting' | 'denied' | 'error' | 'ready';
+export type WandState = CameraState;
 
 /** Working resolution. 160x120 is 19k pixels: under a millisecond, and plenty for a 7px disc. */
 const PROC_H = 120;
 const MAX_PROC_W = 240;
 /** Frames averaged for the tracking-lock and frame-rate readouts. */
 const LOCK_WINDOW = 120;
-const FPS_WINDOW = 30;
 /** Frames sampled during calibration, about half a second of holding still. */
 export const CALIBRATION_FRAMES = 30;
 
@@ -42,8 +43,6 @@ const CAL_KEY = 'neon-roads-wand-v1';
 
 export class WandInput {
   readonly mapper = new WandMapper();
-  state: WandState = 'off';
-  error = '';
   model: WandModel | null = null;
   /** Latest tracked discs, in processing-canvas pixels, for the preview overlay. */
   blobs: { a: Blob | null; b: Blob | null } = { a: null, b: null };
@@ -53,28 +52,18 @@ export class WandInput {
   onFrame: (() => void) | null = null;
   onJump: (() => void) | null = null;
 
-  readonly video = document.createElement('video');
-  private stream: MediaStream | null = null;
+  private camera = new CameraSource({ width: 640, height: 480, frameRate: 60 });
   // Starts at 0x0 rather than the 300x150 a fresh canvas defaults to, so `width`/`height` are a
   // reliable "have we processed a frame yet" signal for the UI.
   private canvas = Object.assign(document.createElement('canvas'), { width: 0, height: 0 });
   private ctx: CanvasRenderingContext2D | null = null;
   private frame: ImageData | null = null;
   private gates: { a: Gate | null; b: Gate | null } = { a: null, b: null };
-  private raf = 0;
-  private vfc = 0;
-  private stopped = true;
-  private starting: Promise<boolean> | null = null;
-  private last = 0;
-  // Ring buffers with running sums: the readouts must not cost more than the tracking does.
+  // Ring buffer with a running sum: the readouts must not cost more than the tracking does.
   private lockHist = new Float32Array(LOCK_WINDOW);
   private lockAt = 0;
   private lockN = 0;
   private lockSum = 0;
-  private fpsHist = new Float32Array(FPS_WINDOW);
-  private fpsAt = 0;
-  private fpsN = 0;
-  private fpsSum = 0;
 
   private sampler = new CalibrationSampler();
   private calibrating = false;
@@ -83,6 +72,18 @@ export class WandInput {
   private calDone: ((r: CalibrationResult | CalibrationError) => void) | null = null;
   /** While set, coloured-pixel counts for this box are refreshed every frame for the aiming UI. */
   previewBox: Rect | null = null;
+
+  get video(): HTMLVideoElement {
+    return this.camera.video;
+  }
+
+  get state(): WandState {
+    return this.camera.state;
+  }
+
+  get error(): string {
+    return this.camera.error;
+  }
 
   get width(): number {
     return this.canvas.width;
@@ -97,111 +98,24 @@ export class WandInput {
   }
 
   async start(): Promise<boolean> {
-    if (this.state === 'ready') return true;
-    // Double-clicking "Enable camera" would otherwise open a second stream and a second loop.
-    if (this.starting) return this.starting;
-    this.starting = this.open();
-    try {
-      return await this.starting;
-    } finally {
-      this.starting = null;
-    }
-  }
-
-  private async open(): Promise<boolean> {
-    this.state = 'starting';
-    this.error = '';
-    if (!navigator.mediaDevices?.getUserMedia) {
-      this.state = 'error';
-      this.error = 'This browser has no camera access.';
-      return false;
-    }
-    try {
-      // Low resolution at a high frame rate: every frame of camera latency is jump latency.
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 60, min: 24 }, facingMode: 'user' },
-        audio: false,
-      });
-    } catch (e) {
-      const name = (e as DOMException)?.name;
-      this.state = name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'error';
-      this.error =
-        this.state === 'denied'
-          ? 'Camera permission was blocked. Allow it in the address bar, then try again.'
-          : `Could not open the camera (${name ?? 'unknown error'}).`;
-      return false;
-    }
-    this.lockCameraSettings();
-    this.video.srcObject = this.stream;
-    this.video.playsInline = true;
-    this.video.muted = true;
-    try {
-      await this.video.play();
-    } catch {
-      // Autoplay of a muted local stream is allowed; if it is not, the loop below still polls.
-    }
-    this.stopped = false;
-    this.last = performance.now();
-    this.state = 'ready';
-    this.loop();
-    return true;
-  }
-
-  /**
-   * Auto-exposure and auto-white-balance re-tune the whole frame when a bright wand enters it,
-   * which shifts the calibrated colours. Locking them helps where supported and is ignored where
-   * it is not, which is most places.
-   */
-  private lockCameraSettings(): void {
-    const track = this.stream?.getVideoTracks()[0];
-    if (!track?.applyConstraints) return;
-    // White balance is the setting that actually moves calibrated colours; exposure is left on
-    // auto deliberately, since locking it in a dim room can pin the image too dark to track.
-    const advanced = [{ whiteBalanceMode: 'manual' }, { focusMode: 'continuous' }];
-    void track.applyConstraints({ advanced } as MediaTrackConstraints).catch(() => {
-      // Unsupported on this camera; auto modes stay on and calibration absorbs the difference.
-    });
+    const ok = await this.camera.start();
+    if (ok) this.camera.onFrame = (dt, latency) => this.tick(dt, latency);
+    return ok;
   }
 
   stop(): void {
-    this.stopped = true;
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
-    const v = this.video as HTMLVideoElement & { cancelVideoFrameCallback?: (h: number) => void };
-    if (this.vfc && v.cancelVideoFrameCallback) v.cancelVideoFrameCallback(this.vfc);
-    this.vfc = 0;
+    this.camera.onFrame = null;
+    this.camera.stop();
     // Anything awaiting calibration must be released, or the setup screen sticks on "Hold still".
     this.cancelCalibration();
-    for (const t of this.stream?.getTracks() ?? []) t.stop();
-    this.stream = null;
-    this.video.srcObject = null;
-    this.state = 'off';
     this.mapper.reset();
     this.blobs = { a: null, b: null };
     this.pose = null;
+    this.lockSum = 0;
+    this.lockN = 0;
+    this.lockAt = 0;
+    this.lockHist.fill(0);
   }
-
-  private loop = (): void => {
-    if (this.stopped) return;
-    const v = this.video as HTMLVideoElement & {
-      requestVideoFrameCallback?: (cb: (now: number, meta: Record<string, number>) => void) => number;
-    };
-    if (v.requestVideoFrameCallback) {
-      this.vfc = v.requestVideoFrameCallback((now, meta) => {
-        this.vfc = 0;
-        // presentationTime shares the performance.now() timeline, so the gap is a fair estimate
-        // of how stale the pixels already are before we even look at them.
-        const captured = meta.captureTime ?? meta.presentationTime ?? 0;
-        this.tick(captured > 0 ? Math.max(0, now - captured) : 0);
-        this.loop();
-      });
-    } else {
-      this.raf = requestAnimationFrame(() => {
-        this.tick(0);
-        this.loop();
-      });
-    }
-  };
 
   private ensureCanvas(): boolean {
     const vw = this.video.videoWidth;
@@ -228,11 +142,10 @@ export class WandInput {
     return !!this.ctx;
   }
 
-  private tick(latency: number): void {
-    if (this.stopped) return;
+  private tick(dt: number, latency: number): void {
     const t0 = performance.now();
-    const dt = Math.min(0.1, Math.max(1e-4, (t0 - this.last) / 1000));
-    this.last = t0;
+    this.stats.latency = this.camera.stats.latency;
+    this.stats.fps = this.camera.stats.fps;
     if (!this.ensureCanvas()) return;
     const ctx = this.ctx!;
     const w = this.canvas.width;
@@ -267,13 +180,8 @@ export class WandInput {
       this.stats.lockRate = this.lockSum / this.lockN;
     }
 
-    this.fpsSum += 1 / dt - this.fpsHist[this.fpsAt];
-    this.fpsHist[this.fpsAt] = 1 / dt;
-    this.fpsAt = (this.fpsAt + 1) % FPS_WINDOW;
-    this.fpsN = Math.min(FPS_WINDOW, this.fpsN + 1);
-    this.stats.fps = this.fpsSum / this.fpsN;
     this.stats.cost = this.stats.cost * 0.9 + (performance.now() - t0) * 0.1;
-    if (latency > 0) this.stats.latency = this.stats.latency * 0.9 + latency * 0.1;
+    void latency;
     this.onFrame?.();
   }
 
@@ -328,7 +236,7 @@ export class WandInput {
     out.steer = m.out.steer;
     out.throttle = m.out.throttle;
     out.jump = m.out.jump;
-    out.active = this.state === 'ready' && !!this.model && m.status !== 'searching';
+    out.active = this.camera.ready && !!this.model && m.status !== 'searching';
   }
 
   save(): void {
